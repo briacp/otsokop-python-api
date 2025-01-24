@@ -13,7 +13,7 @@ banner = """
 /  _ Y__ __Y ___\/  _ \/ |/ //  _ \/  __\\
 | / \| / \ |    \| / \||   / | / \||  \/|
 | \_/| | | \___ || \_/||   \ | \_/||  __/
-\____/ \_/ \____/\____/\_|\_\\____/\_/   
+\____/ \_/ \____/\____/\_|\_\\\____/\_/   
 """
 
 
@@ -97,13 +97,15 @@ class Odoo:
             "search_read",
             [
                 [
-                    ["create_date", ">=", self._to_utc(datetime_start)],
-                    ["create_date", "<=", self._to_utc(datetime_end)],
+                    ["date_order", ">=", self._to_utc(datetime_start)],
+                    ["date_order", "<=", self._to_utc(datetime_end)],
+                    "|",
                     "|",
                     ["state", "=", "done"],
                     ["state", "=", "paid"],
+                    ["state", "=", "invoiced"],
                 ],
-                ["create_date", "partner_id", "amount_total", "lines"],
+                ["date_order", "partner_id", "amount_total", "state", "lines"],
             ],
         )
 
@@ -111,7 +113,6 @@ class Odoo:
             partner = pos_order["partner_id"] or [0, None]
             pos_order["partner_id"] = partner[0]
             pos_order["partner_name"] = partner[1]
-            # pos_order["create_date"] = self._to_local_tz(pos_order["create_date"])
             data_orders.append(pos_order)
 
             pos_order_lines = self.execute_kw(
@@ -122,16 +123,16 @@ class Odoo:
                     ["product_id", "price_subtotal_incl", "qty", "discount"],
                 ],
             )
+
             for pos_order_line in pos_order_lines:
+                pos_order_line["date_order"] = pos_order["date_order"]
                 pos_order_line["order_id"] = pos_order["id"]
                 pos_order_line["product_name"] = pos_order_line["product_id"][1]
                 pos_order_line["product_id"] = pos_order_line["product_id"][0]
                 data_order_lines.append(pos_order_line)
 
         orders = pd.DataFrame(data_orders)
-        orders["create_date"] = pd.to_datetime(
-            orders["create_date"]
-        )
+        orders["date_order"] = pd.to_datetime(orders["date_order"])
 
         result = [orders, pd.DataFrame(data_order_lines)]
 
@@ -170,9 +171,7 @@ class Odoo:
             product["categ_id"] = product["categ_id"][0]
 
         all_products = pd.DataFrame(all_products)
-        all_products["create_date"] = pd.to_datetime(
-            all_products["create_date"]
-        )
+        all_products["create_date"] = pd.to_datetime(all_products["create_date"])
 
         self._set_cache("get_all_products", all_products, Odoo.SECONDS_IN_DAY)
 
@@ -188,11 +187,13 @@ class Odoo:
             "search_read",
             [
                 [
-                    # ["is_member", "=", "true"]
+                    ["is_member", "=", "true"]
                 ],
                 [
-                    # "name",
+                    "name",
                     "city",
+                    "street",
+                    "street2",
                     "gender",
                     "age",
                     "is_squadleader",
@@ -201,9 +202,11 @@ class Odoo:
                     "working_state",
                     "is_unsubscribed",
                     "is_worker_member",
-                    "is_member",
+                    #"is_member",
                     "customer",
                     "supplier",
+                    "cooperative_state",
+                    "create_date",
                 ],
             ],
         )
@@ -242,9 +245,7 @@ class Odoo:
 
         result = pd.DataFrame(pos_order_lines)
 
-        result["create_date"] = pd.to_datetime(
-            result["create_date"]
-        )
+        result["create_date"] = pd.to_datetime(result["create_date"])
 
         self._set_cache(cache_key, result)
         return result
