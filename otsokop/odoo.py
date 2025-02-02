@@ -22,7 +22,18 @@ class Odoo:
     DISABLE_CACHE = False
     SECONDS_IN_DAY = 60 * 60 * 24
 
-    def __init__(self, config_file, logging_level=logging.DEBUG):
+    def __init__(
+        self,
+        config_file=None,
+        *,
+        server=None,
+        database=None,
+        username=None,
+        password=None,
+        debug=None,
+        timezone=None,
+        logging_level=logging.DEBUG,
+    ):
         self.config_file = config_file
         self._uid = None
         self._cache = diskcache.Cache("cache")
@@ -32,14 +43,38 @@ class Odoo:
         )
 
         # Load config from a JSON file
-        with open(self.config_file) as config_file:
-            config = json.load(config_file)
-        self.url = config.get("odoo.server")
-        self.db = config.get("odoo.database")
-        self.username = config.get("odoo.username")
-        self._password = config.get("odoo.password")
-        self.debug = config.get("odoo.debug") or Odoo.XMLRPC_DEBUG
-        self._local_tz = pytz.timezone(config.get("user.timezone"))
+        # Load configuration
+        config = {}
+        if config_file:
+            with open(config_file) as f:
+                config = json.load(f)
+            self.config_file = config_file
+
+        # Set attributes with priority to directly passed parameters
+        self.url = server or config.get("odoo.server")
+        self.db = database or config.get("odoo.database")
+        self.username = username or config.get("odoo.username")
+        self._password = password or config.get("odoo.password")
+        self.debug = (
+            debug if debug is not None else config.get("odoo.debug", Odoo.XMLRPC_DEBUG)
+        )
+
+        timezone_value = timezone or config.get("user.timezone")
+        if timezone_value:
+            self._local_tz = pytz.timezone(timezone_value)
+        else:
+            self._local_tz = pytz.UTC
+
+        # Validate required parameters
+        required_params = ["url", "db", "username", "_password"]
+        missing_params = [
+            param for param in required_params if not getattr(self, param)
+        ]
+        if missing_params:
+            raise ValueError(
+                f"Missing required parameters: {', '.join(missing_params)}. "
+                "Please provide them either through config file or as parameters."
+            )
 
     def _connect(self):
         # Connect to Odoo
@@ -186,9 +221,7 @@ class Odoo:
             "res.partner",
             "search_read",
             [
-                [
-                    ["is_member", "=", "true"]
-                ],
+                [["is_member", "=", "true"]],
                 [
                     "name",
                     "city",
@@ -202,7 +235,7 @@ class Odoo:
                     "working_state",
                     "is_unsubscribed",
                     "is_worker_member",
-                    #"is_member",
+                    # "is_member",
                     "customer",
                     "supplier",
                     "cooperative_state",

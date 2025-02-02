@@ -11,16 +11,28 @@ import logging
 import os
 import smtplib
 import sys
+import json
 
 FR_HOLIDAYS = holidays.FR()
 LOCALE = "fr_FR"
 DAY_FORMAT = "EEEE'<br/>'dd MMMM'<br/>'yyyy"
 MONTH_FORMAT = "MMMM'<br/>'yyyy"
 
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
+SEND_EMAIL = False
+
+with open("app_settings.json") as f:
+    config = json.load(f)
+
+ODOO_SERVER = config.get("odoo.server") or os.getenv("ODOO_SERVER")
+ODOO_DB = config.get("odoo.database") or os.getenv("ODOO_DB")
+ODOO_USERNAME = config.get("odoo.username") or os.getenv("ODOO_USERNAME")
+ODOO_SECRET = config.get("odoo.password") or os.getenv("ODOO_SECRET")
+
+SENDER_EMAIL = config.get("email.server") or os.getenv("SENDER_EMAIL")
+RECEIVER_EMAIL = config.get("email.recipient") or os.getenv("RECEIVER_EMAIL")
 # generated with https://myaccount.google.com/apppasswords
-EMAIL_PASSWORD =  os.getenv("EMAIL_PASSWORD")
+EMAIL_PASSWORD = config.get("email.password") or os.getenv("EMAIL_PASSWORD")
+
 
 def main():
     date_start = (
@@ -42,10 +54,14 @@ def main():
         ]
     )
 
-    content.extend(daily_stats(date_start))
+    daily_stats_content = daily_stats(date_start)
+    if daily_stats_content is not None:
+        content.extend(daily_stats_content)
 
+    monthly_stats_content = None
     if date_start.day == 1:
-        content.extend(monthly_stats(datetime.strptime("2025-01", "%Y-%m")))
+        monthly_stats_content = monthly_stats(datetime.strptime("2025-01", "%Y-%m"))
+        content.extend(monthly_stats_content)
 
     content.extend(
         [
@@ -56,17 +72,31 @@ def main():
         ]
     )
 
-    send_email(content)
+    # Only send email if we have something to send...
+    if (daily_stats_content is not None) or (monthly_stats_content is not None):
+        send_email(content)
 
 
 def daily_stats(current_date):
     content = []
     if current_date in FR_HOLIDAYS:
-        return f"Le {format_date(current_date, locale=LOCALE)} est un jour ferié ({FR_HOLIDAYS.get(current_date)}), le magasin était fermé"
+        print(
+            f"Le {format_date(current_date, locale=LOCALE)} est un jour ferié ({FR_HOLIDAYS.get(current_date)}), le magasin était fermé"
+        )
+        return None
     if current_date.weekday() == 6:
-        return f"Le {format_date(current_date, locale=LOCALE)} est un dimanche, le magasin était fermé"
+        print(
+            f"Le {format_date(current_date, locale=LOCALE)} est un dimanche, le magasin était fermé"
+        )
+        return None
 
-    client = Odoo("../../assets/cfg/app_settings.json", logging.INFO)
+    client = Odoo(
+        server=ODOO_SERVER,
+        database=ODOO_DB,
+        username=ODOO_USERNAME,
+        password=ODOO_SECRET,
+        logging_level=logging.INFO,
+    )
     order_dataframes = client.get_pos_orders(current_date.strftime("%Y-%m-%d"))
     orders = order_dataframes[0]
 
@@ -104,7 +134,13 @@ def monthly_stats(current_date):
     content = []
     end_date = current_date + relativedelta(months=1)
 
-    client = Odoo("../../assets/cfg/app_settings.json", logging.INFO)
+    client = Odoo(
+        server=ODOO_SERVER,
+        database=ODOO_DB,
+        username=ODOO_USERNAME,
+        password=ODOO_SECRET,
+        logging_level=logging.INFO,
+    )
     order_dataframes = client.get_pos_orders(
         current_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
     )
@@ -307,8 +343,9 @@ def start_html():
 
 
 def send_email(body):
-    #print("\n".join(body))
-    #return
+    if not SEND_EMAIL:
+        print("\n".join(body))
+        return
 
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL

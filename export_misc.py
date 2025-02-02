@@ -3,30 +3,23 @@ from otsokop.odoo import banner as otsokop_banner
 import pandas as pd
 import sys
 
-client = Odoo("../../assets/cfg/app_settings.json")
+client = Odoo("app_settings.json")
 
 
 def main():
-    #stock_picking()
-    #stock_quant()
-    #product_categories()
+    # stock_picking()
+    # stock_quant()
+    # product_categories()
     portal_users_stats()
+
 
 def portal_users_stats():
     users = client.execute_kw(
         "res.users",
         "search_read",
         [
-            [
-            ],
-            [
-                "id",
-                "display_name",
-                "activity_state",
-                "log_ids",
-                "login_date"
-
-            ],
+            [],
+            ["id", "display_name", "activity_state", "log_ids", "login_date"],
         ],
     )
     # for r in products:
@@ -35,19 +28,18 @@ def portal_users_stats():
     print(users)
     users.to_excel("output/users.xlsx", index=False)
 
+
 def product_categories():
     products = client.execute_kw(
         "product.category",
         "search_read",
         [
-            [
-            ],
+            [],
             [
                 "id",
                 "display_name",
                 "parent_id",
                 "product_count",
-
             ],
         ],
     )

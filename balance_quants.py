@@ -3,7 +3,7 @@ from otsokop.odoo import banner as otsokop_banner
 import pandas as pd
 import sys
 
-client = Odoo("../../assets/cfg/app_settings.json")
+client = Odoo("app_settings.json")
 
 
 def main():

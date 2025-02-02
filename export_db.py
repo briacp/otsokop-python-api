@@ -10,7 +10,7 @@ SKIP_ORDERS = False
 DELETE_CACHE = False
 
 print(otsokop_banner)
-client = Odoo("../../assets/cfg/app_settings.json")
+client = Odoo("app_settings.json")
 
 db_name = f"output/odoo_2023-2024.db"
 xlsx_name = f"output/odoo_2023-2024.xlsx"
@@ -32,7 +32,11 @@ print("Exporting all members...")
 #     del client._cache["get_all_members"]
 members = client.get_all_members()
 
-members = members.merge(members_address[["id", "distance_in_m", "latitude", "longitude"]], on="id", how="left")
+members = members.merge(
+    members_address[["id", "distance_in_m", "latitude", "longitude"]],
+    on="id",
+    how="left",
+)
 
 members.to_sql(name="partner", con=engine, index=False)
 
@@ -43,26 +47,26 @@ members[members["customer"] == True].to_excel(
     columns=[
         "id",
         "create_date",
-        #"name",
-        #"street",
-        #"street2",
+        # "name",
+        # "street",
+        # "street2",
         "city",
         "gender",
         "age",
         "distance_in_m",
-        #"latitude",
-        #"longitude",
+        # "latitude",
+        # "longitude",
         # ---
-        #"shift_type",
-        #"working_state",
-        #"is_unsubscribed",
-        #"is_worker_member",
-        #"is_member",
-        #"customer",
-        #"supplier",
-        #"is_squadleader",
-        #"is_exempted",
-        #"cooperative_state",
+        # "shift_type",
+        # "working_state",
+        # "is_unsubscribed",
+        # "is_worker_member",
+        # "is_member",
+        # "customer",
+        # "supplier",
+        # "is_squadleader",
+        # "is_exempted",
+        # "cooperative_state",
     ],
 )
 
@@ -103,7 +107,9 @@ for year in range(2023, 2025):
         last_day = calendar.monthrange(year, month)[1]
         if DELETE_CACHE:
             print(f"Delete cache for {year}-{month}...")
-            del client._cache[f"get_pos_orders-{year}-{month:02d}-01 00:00:00-{year}-{month:02d}-{last_day} 23:59:59"]
+            del client._cache[
+                f"get_pos_orders-{year}-{month:02d}-01 00:00:00-{year}-{month:02d}-{last_day} 23:59:59"
+            ]
         print(
             f"Exporting all POS orders for {year}-{month:02d}-01 / {year}-{month:02d}-{last_day}"
         )
@@ -119,7 +125,9 @@ del orders["partner_name"]
 
 print(orders)
 
-order_lines['partner_id'] = order_lines['order_id'].map(orders.set_index('id')['partner_id'])
+order_lines["partner_id"] = order_lines["order_id"].map(
+    orders.set_index("id")["partner_id"]
+)
 
 orders.to_excel(
     writer,
@@ -148,8 +156,6 @@ del order_lines["product_name"]
 del order_lines["date_order"]
 del order_lines["partner_id"]
 orders.to_sql(name="order", if_exists="append", con=engine, index=False)
-order_lines.to_sql(
-    name="order_line", if_exists="append", con=engine, index=False
-)
+order_lines.to_sql(name="order_line", if_exists="append", con=engine, index=False)
 
 writer.close()

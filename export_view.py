@@ -2,7 +2,7 @@ from otsokop.odoo import Odoo
 from otsokop.odoo import banner as otsokop_banner
 import pandas as pd
 
-client = Odoo("../../assets/cfg/app_settings.json")
+client = Odoo("app_settings.json")
 
 # addons/products/models/product.py
 # def get_history_price(self, company_id, date=None):

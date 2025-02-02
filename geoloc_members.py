@@ -9,7 +9,7 @@ import simplekml as sk
 
 geolocator = BANFrance(user_agent="otsokop_geocode")
 print(otsokop_banner)
-client = Odoo("../../assets/cfg/app_settings.json")
+client = Odoo("app_settings.json")
 
 FETCH_ODOO = False
 OTSOKOP_COORDS = (43.502103, -1.468321)
@@ -65,6 +65,7 @@ def distance_to_otsokop(members_address):
         )
     members_address.to_csv("output/members_address.csv", index=False)
 
+
 def members_kml(members_address):
     kml = sk.Kml(name="Otsokop members")
     style = sk.Style()
@@ -82,11 +83,12 @@ def members_kml(members_address):
         if pd.isna(m["latitude"]):
             continue
         kml.newpoint(
-            #name=m['id'],
-            coords=[(m['longitude'], m['latitude'])],
+            # name=m['id'],
+            coords=[(m["longitude"], m["latitude"])],
         )
-    
+
     kml.save(f"output/otsokop_members.kml")
+
 
 fetch_location(members_address)
 distance_to_otsokop(members_address)
