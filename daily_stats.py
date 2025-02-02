@@ -19,6 +19,7 @@ DAY_FORMAT = "EEEE'<br/>'dd MMMM'<br/>'yyyy"
 MONTH_FORMAT = "MMMM'<br/>'yyyy"
 
 SEND_EMAIL = True
+INCLUDE_MEDIAN = False
 
 try:
     with open("app_settings.json") as f:
@@ -190,7 +191,7 @@ def order_summary(content, current, previous, orders, orders_previous):
     # ------------------------------
     # Total Sales
     content.append(f"  <tr style='background-color: #eeedbb'>")
-    content.append("<th class='stat'>Chiffre d'affaire</th>")
+    content.append("<th class='stat'>Chiffre d'affaires</th>")
     content.append(
         f"   <td class='current'>{currency(orders['amount_total'].sum())} €</td>"
     )
@@ -227,28 +228,29 @@ def order_summary(content, current, previous, orders, orders_previous):
 
     # ------------------------------
     # Panier médian
-    content.append(f"<tr style='background-color: #eeedbb'>")
-    content.append("<th class='stat'>Panier médian</th>")
-    content.append(
-        f"<td class='current'>{currency(orders['amount_total'].median())} €</td>"
-    )
-    if orders_previous is not None:
+    if INCLUDE_MEDIAN:
+        content.append(f"<tr style='background-color: #eeedbb'>")
+        content.append("<th class='stat'>Panier médian</th>")
         content.append(
-            f"<td>{currency(orders_previous['amount_total'].median())} €</td>"
+            f"<td class='current'>{currency(orders['amount_total'].median())} €</td>"
         )
-        add_gap(
-            content,
-            orders["amount_total"].median(),
-            orders_previous["amount_total"].median(),
-        )
-    else:
-        content.append("<td><i>--</i></td>")
-    content.append("</tr>")
+        if orders_previous is not None:
+            content.append(
+                f"<td>{currency(orders_previous['amount_total'].median())} €</td>"
+            )
+            add_gap(
+                content,
+                orders["amount_total"].median(),
+                orders_previous["amount_total"].median(),
+            )
+        else:
+            content.append("<td><i>--</i></td>")
+        content.append("</tr>")
 
     # ------------------------------
     # Nombre de commandes
     content.append(f"<tr>")
-    content.append("<th class='stat'>Nombre de commandes  </th>")
+    content.append("<th class='stat'>Nombre de commandes</th>")
     content.append(f"<td class='current'> {orders['id'].count()}</td>")
     if orders_previous is not None:
         content.append(f"<td> {orders_previous['id'].count()}</td>")
@@ -260,7 +262,7 @@ def order_summary(content, current, previous, orders, orders_previous):
     # ------------------------------
     # Coops/Acheteurs
     content.append(f"<tr style='background-color: #eeedbb'>")
-    content.append("<th class='stat'>Coops/Acheteurs</th>")
+    content.append("<th class='stat'>Nombre de Coops acheteurs</th>")
     content.append(f"<td class='current'> {orders['partner_id'].nunique()}</td>")
     if orders_previous is not None:
         content.append(f"<td>{orders_previous['partner_id'].nunique()}</td>")
