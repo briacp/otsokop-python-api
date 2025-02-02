@@ -32,6 +32,7 @@ ODOO_USERNAME = config.get("odoo.username") or os.getenv("ODOO_USERNAME")
 ODOO_SECRET = config.get("odoo.password") or os.getenv("ODOO_SECRET")
 
 SENDER_EMAIL = config.get("email.sender") or os.getenv("SENDER_EMAIL")
+# comma separated list of recipients
 RECEIVER_EMAIL = config.get("email.recipient") or os.getenv("RECEIVER_EMAIL")
 # generated with https://myaccount.google.com/apppasswords
 EMAIL_PASSWORD = config.get("email.password") or os.getenv("EMAIL_PASSWORD")
@@ -350,9 +351,11 @@ def send_email(body):
         print("\n".join(body))
         return
 
+    recipients = RECEIVER_EMAIL.split(",")
+
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
-    msg["To"] = RECEIVER_EMAIL
+    msg["To"] = ", ".join(recipients)
     msg["Subject"] = "[Otsokop] Suivi des indicateurs de ventes"
 
     msg.attach(MIMEText("\n".join(body), "html"))
@@ -361,7 +364,7 @@ def send_email(body):
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
             server.login(SENDER_EMAIL, EMAIL_PASSWORD)
-            server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+            server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
         logging.info("Email envoyé avec succès.")
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email : {e}")
