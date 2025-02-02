@@ -18,7 +18,7 @@ LOCALE = "fr_FR"
 DAY_FORMAT = "EEEE'<br/>'dd MMMM'<br/>'yyyy"
 MONTH_FORMAT = "MMMM'<br/>'yyyy"
 
-SEND_EMAIL = True
+SEND_EMAIL = False
 INCLUDE_MEDIAN = False
 
 try:
@@ -229,7 +229,7 @@ def order_summary(content, current, previous, orders, orders_previous):
     # ------------------------------
     # Panier médian
     if INCLUDE_MEDIAN:
-        content.append(f"<tr style='background-color: #eeedbb'>")
+        content.append(f"<tr>")
         content.append("<th class='stat'>Panier médian</th>")
         content.append(
             f"<td class='current'>{currency(orders['amount_total'].median())} €</td>"
@@ -249,8 +249,8 @@ def order_summary(content, current, previous, orders, orders_previous):
 
     # ------------------------------
     # Nombre de commandes
-    content.append(f"<tr>")
-    content.append("<th class='stat'>Nombre de commandes</th>")
+    content.append(f"<tr style='background-color: #eeedbb'>")
+    content.append("<th class='stat'>Nbre de commandes</th>")
     content.append(f"<td class='current'> {orders['id'].count()}</td>")
     if orders_previous is not None:
         content.append(f"<td> {orders_previous['id'].count()}</td>")
@@ -261,8 +261,8 @@ def order_summary(content, current, previous, orders, orders_previous):
 
     # ------------------------------
     # Coops/Acheteurs
-    content.append(f"<tr style='background-color: #eeedbb'>")
-    content.append("<th class='stat'>Nombre de Coops acheteurs</th>")
+    content.append(f"<tr>")
+    content.append("<th class='stat'>Nbre de Coops acheteurs</th>")
     content.append(f"<td class='current'> {orders['partner_id'].nunique()}</td>")
     if orders_previous is not None:
         content.append(f"<td>{orders_previous['partner_id'].nunique()}</td>")
