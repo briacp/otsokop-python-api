@@ -18,17 +18,20 @@ LOCALE = "fr_FR"
 DAY_FORMAT = "EEEE'<br/>'dd MMMM'<br/>'yyyy"
 MONTH_FORMAT = "MMMM'<br/>'yyyy"
 
-SEND_EMAIL = False
+SEND_EMAIL = True
 
-with open("app_settings.json") as f:
-    config = json.load(f)
+try:
+    with open("app_settings.json") as f:
+        config = json.load(f)
+except Exception:
+    config = {}
 
 ODOO_SERVER = config.get("odoo.server") or os.getenv("ODOO_SERVER")
 ODOO_DB = config.get("odoo.database") or os.getenv("ODOO_DB")
 ODOO_USERNAME = config.get("odoo.username") or os.getenv("ODOO_USERNAME")
 ODOO_SECRET = config.get("odoo.password") or os.getenv("ODOO_SECRET")
 
-SENDER_EMAIL = config.get("email.server") or os.getenv("SENDER_EMAIL")
+SENDER_EMAIL = config.get("email.sender") or os.getenv("SENDER_EMAIL")
 RECEIVER_EMAIL = config.get("email.recipient") or os.getenv("RECEIVER_EMAIL")
 # generated with https://myaccount.google.com/apppasswords
 EMAIL_PASSWORD = config.get("email.password") or os.getenv("EMAIL_PASSWORD")
