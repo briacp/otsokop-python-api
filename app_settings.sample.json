@@ -1,0 +1,14 @@
+{
+    "store.name": "Otsokop Scanner",
+    "odoo.server": "http://localhost:3000",
+    "odoo.username": "otsokop",
+    "odoo.password": "SuperSecret",
+    "odoo.database": "otsolab",
+    "mail.recipient": "info@otsokop.org",
+    "mail.subject.prefix": "[Otsokop Scanner]",
+    "appColors": {
+        "primaryColor": "#D17E52",
+        "secondaryColor": "#D0D086",
+        "tertiaryColor": "3A4E3F"
+    }
+}
