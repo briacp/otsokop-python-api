@@ -1,17 +1,26 @@
-import sys
+from babel.dates import format_date
+from babel.numbers import format_decimal
 from datetime import date
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from otsokop.odoo import Odoo
-from otsokop.odoo import banner as otsokop_banner
-import logging
 import holidays
-from babel.dates import format_date
+import logging
+import os
+import smtplib
+import sys
 
+FR_HOLIDAYS = holidays.FR()
+LOCALE = "fr_FR"
+DAY_FORMAT = "EEEE'<br/>'dd MMMM'<br/>'yyyy"
+MONTH_FORMAT = "MMMM'<br/>'yyyy"
 
-with_banner = True
-fr_holidays = holidays.FR()
-
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
+# generated with https://myaccount.google.com/apppasswords
+EMAIL_PASSWORD =  os.getenv("EMAIL_PASSWORD")
 
 def main():
     date_start = (
@@ -21,74 +30,78 @@ def main():
     )
     date_start = datetime.strptime(date_start, "%Y-%m-%d")
 
-    daily_stats(date_start)
+    content = start_html()
+    content.extend(
+        [
+            """
+        <p>Bonjour,</p>
+        <p>
+            Voici les derniers indicateurs de ventes à Otsokop :
+        </p>
+    """
+        ]
+    )
+
+    content.extend(daily_stats(date_start))
 
     if date_start.day == 1:
-        monthly_stats(datetime.strptime("2025-01", "%Y-%m"))
+        content.extend(monthly_stats(datetime.strptime("2025-01", "%Y-%m")))
+
+    content.extend(
+        [
+            """
+        <p>Bonne journée,</p>
+        """
+            "</body></html>"
+        ]
+    )
+
+    send_email(content)
 
 
 def daily_stats(current_date):
-
-    if current_date in fr_holidays:
-        print(
-            f"Le {format_date(current_date, locale='fr_FR')} est un jour ferié ({fr_holidays.get(current_date)}), le magasin était fermé"
-        )
-        return 1
+    content = []
+    if current_date in FR_HOLIDAYS:
+        return f"Le {format_date(current_date, locale=LOCALE)} est un jour ferié ({FR_HOLIDAYS.get(current_date)}), le magasin était fermé"
     if current_date.weekday() == 6:
-        print(
-            f"Le {format_date(current_date, locale='fr_FR')} est un dimanche, le magasin était fermé"
-        )
-        return 2
+        return f"Le {format_date(current_date, locale=LOCALE)} est un dimanche, le magasin était fermé"
 
     client = Odoo("../../assets/cfg/app_settings.json", logging.INFO)
     order_dataframes = client.get_pos_orders(current_date.strftime("%Y-%m-%d"))
     orders = order_dataframes[0]
 
-    if with_banner:
-        print(otsokop_banner)
-        print("")
-    print(
-        "Ventes pour le", format_date(current_date, "EEEE dd MMM yyyy", locale="fr_FR")
-    )
-
-    current_year_sales = orders["amount_total"].sum()
+    current = format_date(current_date, DAY_FORMAT, locale="fr_FR")
 
     if orders.empty:
-        print("(aucune donnée disponible)")
-    else:
-        print(order_summary(orders))
-    print("")
+        content.append("<p><i>(aucune donnée disponible)</i></p>")
+        return content
 
     last_year_date = current_date + relativedelta(
         years=-1, weekday=current_date.weekday()
     )
 
-    is_holiday = last_year_date in fr_holidays
+    is_holiday = last_year_date in FR_HOLIDAYS
 
     order_dataframes = client.get_pos_orders(last_year_date.strftime("%Y-%m-%d"))
-    orders = order_dataframes[0]
+    orders_previous = order_dataframes[0]
 
-    print(
-        "Ventes pour le",
-        format_date(last_year_date, "EEEE dd MMM yyyy", locale="fr_FR"),
-    )
+    previous = format_date(last_year_date, DAY_FORMAT, locale="fr_FR")
+
+    content.append("<h2>Rapport quotidien de vente</h2>")
     if is_holiday:
-        print(f"** Jour ferié ({fr_holidays.get(last_year_date)})")
+        content.append(f"<p><i>Jour ferié ({FR_HOLIDAYS.get(last_year_date)})</i></p>")
 
-    if orders.empty:
-        print("(aucune donnée disponible)")
-    else:
-        print(order_summary(orders))
-        print("")
-        last_year_sales = orders["amount_total"].sum()
-        print(
-            f"Indice de réalisation (CA actuel / CA année dernière) : {current_year_sales / last_year_sales * 100:.02f}%"
-        )
-    print("")
+    if orders_previous.empty:
+        orders_previous = None
+
+    order_summary(content, current, previous, orders, orders_previous)
+
+    content.append("")
+    return content
 
 
 def monthly_stats(current_date):
-
+    content = []
     end_date = current_date + relativedelta(months=1)
 
     client = Odoo("../../assets/cfg/app_settings.json", logging.INFO)
@@ -97,53 +110,221 @@ def monthly_stats(current_date):
     )
     orders = order_dataframes[0]
 
-    if with_banner:
-        print("")
+    # content.append("<hr/>")
 
-    print(
-        "Ventes pour le mois de", format_date(current_date, "MMMM yyyy", locale="fr_FR")
-    )
-
-    current_year_sales = orders["amount_total"].sum()
+    current = format_date(current_date, MONTH_FORMAT, locale="fr_FR")
 
     if orders.empty:
-        print("(aucune donnée disponible)")
-    else:
-        print(order_summary(orders))
-    print("")
+        content.append("<p><i>(aucune donnée disponible)</i></p>")
+        return content
 
     last_year_date = current_date + relativedelta(years=-1)
     end_date = last_year_date + relativedelta(months=1)
 
+    previous = format_date(last_year_date, MONTH_FORMAT, locale="fr_FR")
+
     order_dataframes = client.get_pos_orders(
         last_year_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
     )
-    orders = order_dataframes[0]
+    orders_previous = order_dataframes[0]
 
-    print(
-        "Ventes pour le mois de",
-        format_date(last_year_date, "MMMM yyyy", locale="fr_FR"),
+    if orders_previous.empty:
+        orders_previous = None
+
+    content.append("<h2>Rapport mensuel de vente</h2>")
+    order_summary(content, current, previous, orders, orders_previous)
+    return content
+
+
+def order_summary(content, current, previous, orders, orders_previous):
+    content.append("<table>")
+
+    # ------------------------------
+    content.append(
+        f"  <tr style='padding: 1em; color: #fff; background-color: #405140;'><th></th>"
     )
+    content.append(f"<th class='values'>{current}</th>")
+    content.append(f"<th class='values'>{previous}</th>")
+    content.append(f"<th class='values_gap'></th></tr>")
 
-    if orders.empty:
-        print("(aucune donnée disponible)")
-    else:
-        last_year_sales = orders["amount_total"].sum()
-        print(order_summary(orders))
-        print("")
-        print(
-            f"Indice de réalisation (CA actuel / CA année dernière) : {current_year_sales / last_year_sales * 100:.02f}%"
+    # ------------------------------
+    # Total Sales
+    content.append(f"  <tr style='background-color: #eeedbb'>")
+    content.append("<th class='stat'>Chiffre d'affaire</th>")
+    content.append(
+        f"   <td class='current'>{currency(orders['amount_total'].sum())} €</td>"
+    )
+    if orders_previous is not None:
+        content.append(
+            f"   <td> {currency(orders_previous['amount_total'].sum())} €</td>"
         )
-    print("")
+        add_gap(
+            content, orders["amount_total"].sum(), orders_previous["amount_total"].sum()
+        )
+    else:
+        content.append("<td><i>--</i></td>")
+    content.append("</tr>")
+
+    # ------------------------------
+    # Panier moyen
+    content.append(f"<tr>")
+    content.append("<th class='stat'>Panier moyen</th>")
+    content.append(
+        f"<td class='current'>{currency(orders['amount_total'].mean())} €</td>"
+    )
+    if orders_previous is not None:
+        content.append(
+            f"<td> {currency(orders_previous['amount_total'].mean())} €</td>"
+        )
+        add_gap(
+            content,
+            orders["amount_total"].mean(),
+            orders_previous["amount_total"].mean(),
+        )
+    else:
+        content.append("<td><i>--</i></td>")
+    content.append("</tr>")
+
+    # ------------------------------
+    # Panier médian
+    content.append(f"<tr style='background-color: #eeedbb'>")
+    content.append("<th class='stat'>Panier médian</th>")
+    content.append(
+        f"<td class='current'>{currency(orders['amount_total'].median())} €</td>"
+    )
+    if orders_previous is not None:
+        content.append(
+            f"<td>{currency(orders_previous['amount_total'].median())} €</td>"
+        )
+        add_gap(
+            content,
+            orders["amount_total"].median(),
+            orders_previous["amount_total"].median(),
+        )
+    else:
+        content.append("<td><i>--</i></td>")
+    content.append("</tr>")
+
+    # ------------------------------
+    # Nombre de commandes
+    content.append(f"<tr>")
+    content.append("<th class='stat'>Nombre de commandes  </th>")
+    content.append(f"<td class='current'> {orders['id'].count()}</td>")
+    if orders_previous is not None:
+        content.append(f"<td> {orders_previous['id'].count()}</td>")
+        add_gap(content, orders["id"].count(), orders_previous["id"].count())
+    else:
+        content.append("<td><i>--</i></td>")
+    content.append("</tr>")
+
+    # ------------------------------
+    # Coops/Acheteurs
+    content.append(f"<tr style='background-color: #eeedbb'>")
+    content.append("<th class='stat'>Coops/Acheteurs</th>")
+    content.append(f"<td class='current'> {orders['partner_id'].nunique()}</td>")
+    if orders_previous is not None:
+        content.append(f"<td>{orders_previous['partner_id'].nunique()}</td>")
+        add_gap(
+            content,
+            orders["partner_id"].nunique(),
+            orders_previous["partner_id"].nunique(),
+        )
+    else:
+        content.append("<td><i>--</i></td>")
+    content.append("</tr>")
+
+    content.append("</table>")
+
+    content.append("")
+
+    # current_year_sales = orders["amount_total"].sum()
+    # last_year_sales = orders_previous["amount_total"].sum()
+    # content.append(
+    #     f"<p>Indice de réalisation (CA actuel / CA année dernière) : <strong>{current_year_sales / last_year_sales * 100:.02f}%</strong></p>"
+    # )
+
+    return content
 
 
-def order_summary(orders):
-    print(f"  * Chiffre d'affaire    : {orders['amount_total'].sum():.02f} €")
-    print(f"  * Panier moyen         : {orders['amount_total'].mean():.02f} €")
-    print(f"  * Panier median        : {orders['amount_total'].median():.02f} €")
-    print(f"  * Nombre de commandes  : {orders['id'].count()}")
-    print(f"  * Coops/Acheteurs      : {orders['partner_id'].nunique()}")
-    return ""
+def currency(n):
+    return format_decimal(n, "#,##0.##;-# ¤", locale=LOCALE)
+
+
+def percent(n):
+    return format_decimal(n, "0.## %", locale=LOCALE)
+
+
+def add_gap(content, current_value, previous_value):
+    if current_value > previous_value:
+        tag = "up"
+        icon = " ▲"
+    elif current_value < previous_value:
+        tag = "down"
+        icon = " ▼"
+    else:
+        tag = "stable"
+        icon = ""
+
+    gap = current_value - previous_value
+    gap_pc = current_value / previous_value
+    content.append(f"<td class='gap {tag}'>")
+    # content.append(f"<span class='gap_v'>{gap:.2f}</span>&nbsp;|&nbsp;")
+    content.append(f"<span class='gap_pc'>{percent(gap_pc)}</span>")
+    content.append(icon)
+    content.append("</td>")
+
+
+def start_html():
+    content = []
+    content.append("<html><head>")
+    content.append("<style>")
+    content.append(
+        """
+    body { font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif; }
+    h2 { color: #9c5c34; }
+    table {  border-collapse: collapse; border: solid 1px #2b392b; }
+    th, td { padding: 0.2em; }
+    /*
+    tr th:first-child { width: 220px; }
+    .up:after { content: "▲"; }
+    .down:after { content: "▼"; }
+    table tr:first-child th { padding: 1em; color: #fff; background-color: #405140; }
+    tr:nth-child(odd) { background-color:#eeedbb; }
+    */
+    th.stat {width: 220px; }
+    .up { color: #2e822b; }
+    .down { color: #b72525; }
+    th { text-align: right; }
+    td { text-align: right; }
+    td.gap { width: 125px; }
+    th.values { width: 150px; }
+    td.current { font-weight: bold; }
+    """
+    )
+    content.append("</style>")
+    content.append("</head><body>")
+    return content
+
+
+def send_email(body):
+    #print("\n".join(body))
+    #return
+
+    msg = MIMEMultipart()
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECEIVER_EMAIL
+    msg["Subject"] = "[Otsokop] Suivi des indicateurs de ventes"
+
+    msg.attach(MIMEText("\n".join(body), "html"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, EMAIL_PASSWORD)
+            server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+        logging.info("Email envoyé avec succès.")
+    except Exception as e:
+        logging.error(f"Erreur lors de l'envoi de l'email : {e}")
 
 
 if __name__ == "__main__":
