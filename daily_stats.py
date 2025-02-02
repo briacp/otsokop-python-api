@@ -18,7 +18,7 @@ LOCALE = "fr_FR"
 DAY_FORMAT = "EEEE'<br/>'dd MMMM'<br/>'yyyy"
 MONTH_FORMAT = "MMMM'<br/>'yyyy"
 
-SEND_EMAIL = False
+SEND_EMAIL = True
 INCLUDE_MEDIAN = False
 
 try:
