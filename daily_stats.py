@@ -45,6 +45,7 @@ def main():
         if len(sys.argv) >= 2
         else (date.today() + relativedelta(days=-1)).strftime("%Y-%m-%d")
     )
+
     date_start = datetime.strptime(date_start, "%Y-%m-%d")
 
     content = start_html()
@@ -65,7 +66,8 @@ def main():
 
     monthly_stats_content = None
     if date_start.day == 1:
-        monthly_stats_content = monthly_stats(datetime.strptime("2025-01", "%Y-%m"))
+        last_month = date_start + relativedelta(months=-1)
+        monthly_stats_content = monthly_stats(last_month)
         content.extend(monthly_stats_content)
 
     content.extend(
