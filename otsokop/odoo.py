@@ -106,7 +106,9 @@ class Odoo:
             print("Fault string: %s" % err.faultString, file=sys.stderr)
             # raise Exception("Odoo XMLRPC Exception")
 
-    def get_pos_orders(self, date_start, date_end: str = None):
+    def get_pos_orders(
+        self, date_start, date_end: str = None, include_order_lines=True
+    ):
         if not (date_end):
             date_end = date_start
 
@@ -120,7 +122,11 @@ class Odoo:
         else:
             datetime_end = date_end
 
-        cache_key = f"get_pos_orders-{datetime_start}-{datetime_end}"
+        logging.debug(
+            f"get_pos_orders {self._to_utc(datetime_start)} - {self._to_utc(datetime_end)}"
+        )
+
+        cache_key = f"get_pos_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
@@ -150,21 +156,24 @@ class Odoo:
             pos_order["partner_name"] = partner[1]
             data_orders.append(pos_order)
 
-            pos_order_lines = self.execute_kw(
-                "pos.order.line",
-                "search_read",
-                [
-                    [["id", "in", pos_order["lines"]]],
-                    ["product_id", "price_subtotal_incl", "qty", "discount"],
-                ],
-            )
+            if include_order_lines:
+                pos_order_lines = self.execute_kw(
+                    "pos.order.line",
+                    "search_read",
+                    [
+                        [["id", "in", pos_order["lines"]]],
+                        ["product_id", "price_subtotal_incl", "qty", "discount"],
+                    ],
+                )
 
-            for pos_order_line in pos_order_lines:
-                pos_order_line["date_order"] = pos_order["date_order"]
-                pos_order_line["order_id"] = pos_order["id"]
-                pos_order_line["product_name"] = pos_order_line["product_id"][1]
-                pos_order_line["product_id"] = pos_order_line["product_id"][0]
-                data_order_lines.append(pos_order_line)
+                for pos_order_line in pos_order_lines:
+                    pos_order_line["date_order"] = pos_order["date_order"]
+                    pos_order_line["order_id"] = pos_order["id"]
+                    pos_order_line["product_name"] = pos_order_line["product_id"][1]
+                    pos_order_line["product_id"] = pos_order_line["product_id"][0]
+                    data_order_lines.append(pos_order_line)
+            else:
+                pos_order_lines = []
 
         orders = pd.DataFrame(data_orders)
         orders["date_order"] = pd.to_datetime(orders["date_order"])

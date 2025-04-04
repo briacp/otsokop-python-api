@@ -104,7 +104,9 @@ def daily_stats(current_date):
         password=ODOO_SECRET,
         logging_level=logging.INFO,
     )
-    order_dataframes = client.get_pos_orders(current_date.strftime("%Y-%m-%d"))
+    order_dataframes = client.get_pos_orders(
+        current_date.strftime("%Y-%m-%d"), include_order_lines=False
+    )
     orders = order_dataframes[0]
 
     current = format_date(current_date, DAY_FORMAT, locale="fr_FR")
@@ -139,7 +141,7 @@ def daily_stats(current_date):
 
 def monthly_stats(current_date):
     content = []
-    end_date = current_date + relativedelta(months=1)
+    end_date = current_date + relativedelta(months=1, days=-1)
 
     client = Odoo(
         server=ODOO_SERVER,
