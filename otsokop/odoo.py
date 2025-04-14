@@ -187,6 +187,82 @@ class Odoo:
 
         return result
 
+    def get_purchase_orders(
+        self, date_start, date_end: str = None, include_order_lines=True
+    ):
+        if not (date_end):
+            date_end = date_start
+
+        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_start)):
+            datetime_start = f"{date_start} 00:00:00"
+        else:
+            datetime_start = date_start
+
+        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_end)):
+            datetime_end = f"{date_end} 23:59:59"
+        else:
+            datetime_end = date_end
+
+        logging.debug(
+            f"get_purchase_orders {self._to_utc(datetime_start)} - {self._to_utc(datetime_end)}"
+        )
+
+        cache_key = f"get_purchase_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
+        if (cached_result := self._check_cache(cache_key)) is not None:
+            return cached_result
+
+        data_orders = []
+        data_order_lines = []
+
+        purchase_orders = self.execute_kw(
+            "purchase.order",
+            "search_read",
+            [
+                [
+                    ["date_order", ">=", self._to_utc(datetime_start)],
+                    ["date_order", "<=", self._to_utc(datetime_end)],
+                ],
+                ["date_order", "display_name", "partner_id", "amount_total", "amount_untaxed", "invoice_status", "state", "order_line"],
+            ],
+        )
+
+        for purchase_order in purchase_orders:
+            partner = purchase_order["partner_id"] or [0, None]
+            purchase_order["partner_id"] = partner[0]
+            purchase_order["partner_name"] = partner[1]
+            data_orders.append(purchase_order)
+
+            if include_order_lines:
+                purchase_order_lines = self.execute_kw(
+                    "purchase.order.line",
+                    "search_read",
+                    [
+                        [["id", "in", purchase_order["order_line"]]],
+                        ["product_id", "price_subtotal", "price_tax", "price_total", "price_unit", "product_qty", "product_uom_qty", "qty_invoiced", "qty_received"],
+                    ],
+                )
+
+                for purchase_order_line in purchase_order_lines:
+                    purchase_order_line["date_order"] = purchase_order["date_order"]
+                    purchase_order_line["order_id"] = purchase_order["id"]
+                    purchase_order_line["product_name"] = purchase_order_line["product_id"][1]
+                    purchase_order_line["product_id"] = purchase_order_line["product_id"][0]
+                    data_order_lines.append(purchase_order_line)
+            else:
+                purchase_order_lines = []
+
+        orders = pd.DataFrame(data_orders)
+        orders["date_order"] = pd.to_datetime(orders["date_order"])
+
+        result = [orders, pd.DataFrame(data_order_lines)]
+
+        if not (result[0].empty):
+            self._set_cache(cache_key, result)
+        # else:
+        #     del self._cache[cache_key]
+
+        return result
+
     # @cached_results
     def get_all_products(self):
         logging.debug("Getting the list of all products...")
@@ -397,9 +473,11 @@ class Odoo:
         all_models = self.execute_kw(
             "ir.model",
             "search_read",
-            [],
-            {
-                "fields": [
+            [
+                # query
+                [], 
+                # fields
+                [
                     "name",
                     "model",
                     "state",
@@ -408,9 +486,10 @@ class Odoo:
                     "transient",
                     "access_ids",
                 ],
-                "domain": [],
-                "limit": 0,
-            },
+                0,
+                0,
+            ],
+
         )
 
         # Print the list of models with their names
