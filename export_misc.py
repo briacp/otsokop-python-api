@@ -7,10 +7,34 @@ client = Odoo("app_settings.json")
 
 
 def main():
+    print("misc export...")
     # stock_picking()
     # stock_quant()
     # product_categories()
-    portal_users_stats()
+    # portal_users_stats()
+    # product_labels()
+    product_list()
+
+
+def product_list():
+    products = client.get_all_products()
+    products.to_csv("output/products.csv", index=False)
+
+
+def product_labels():
+    labels = client.execute_kw(
+        "product.label",
+        "search_read",
+        [
+            [],
+            ["code", "name"],
+        ],
+    )
+    # for r in products:
+    #     r["parent_id"] = r["parent_id"][0] if r["parent_id"] else None
+    labels = pd.DataFrame(labels)
+    print(labels)
+    labels.to_csv("output/labels.csv", index=False)
 
 
 def portal_users_stats():

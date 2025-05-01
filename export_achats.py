@@ -33,9 +33,9 @@ def main():
     achats_df[0].to_csv(f"output/achats_otsokop.csv", index=False)
     achats_df[1].to_csv(f"output/achats_details_otsokop.csv", index=False)
 
+
 def export_achats(current_date):
     end_date = current_date + relativedelta(months=1, days=-1)
-
 
 
 if __name__ == "__main__":

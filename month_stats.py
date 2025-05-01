@@ -14,7 +14,7 @@ import sys
 import json
 
 MONTH_FORMAT = "MMMM' 'yyyy"
-LOCALE="fr_FR"
+LOCALE = "fr_FR"
 try:
     with open("app_settings.json") as f:
         config = json.load(f)
@@ -26,9 +26,10 @@ ODOO_DB = config.get("odoo.database") or os.getenv("ODOO_DB")
 ODOO_USERNAME = config.get("odoo.username") or os.getenv("ODOO_USERNAME")
 ODOO_SECRET = config.get("odoo.password") or os.getenv("ODOO_SECRET")
 
+
 def main():
-    for year in (2023,2024,2025):
-        for month in (1,2,3):
+    for year in (2023, 2024, 2025):
+        for month in (1, 2, 3):
             date_start = datetime.strptime(f"{year}-{month}", "%Y-%m")
             monthly_stats_content = monthly_stats(date_start)
 
@@ -46,7 +47,9 @@ def monthly_stats(current_date):
     )
 
     order_dataframes = client.get_pos_orders(
-        current_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), include_order_lines=False
+        current_date.strftime("%Y-%m-%d"),
+        end_date.strftime("%Y-%m-%d"),
+        include_order_lines=False,
     )
     orders = order_dataframes[0]
 
@@ -67,8 +70,10 @@ def order_summary(current, orders):
     print(f"Nb commandes  : {orders['id'].count()}")
     print("---")
 
+
 def currency(n):
     return format_decimal(n, "#,##0.##;-# ¤", locale=LOCALE)
+
 
 if __name__ == "__main__":
     sys.exit(main())
