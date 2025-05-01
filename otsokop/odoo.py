@@ -126,7 +126,9 @@ class Odoo:
             f"get_pos_orders {self._to_utc(datetime_start)} - {self._to_utc(datetime_end)}"
         )
 
-        cache_key = f"get_pos_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
+        cache_key = (
+            f"get_pos_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
+        )
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
@@ -162,7 +164,7 @@ class Odoo:
                     "search_read",
                     [
                         [["id", "in", pos_order["lines"]]],
-                        ["product_id", "price_subtotal_incl", "qty", "discount"],
+                        ["product_id", "price_subtotal_incl", "price_unit", "qty", "discount"],
                     ],
                 )
 
@@ -207,7 +209,9 @@ class Odoo:
             f"get_purchase_orders {self._to_utc(datetime_start)} - {self._to_utc(datetime_end)}"
         )
 
-        cache_key = f"get_purchase_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
+        cache_key = (
+            f"get_purchase_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
+        )
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
@@ -222,7 +226,16 @@ class Odoo:
                     ["date_order", ">=", self._to_utc(datetime_start)],
                     ["date_order", "<=", self._to_utc(datetime_end)],
                 ],
-                ["date_order", "display_name", "partner_id", "amount_total", "amount_untaxed", "invoice_status", "state", "order_line"],
+                [
+                    "date_order",
+                    "display_name",
+                    "partner_id",
+                    "amount_total",
+                    "amount_untaxed",
+                    "invoice_status",
+                    "state",
+                    "order_line",
+                ],
             ],
         )
 
@@ -238,15 +251,28 @@ class Odoo:
                     "search_read",
                     [
                         [["id", "in", purchase_order["order_line"]]],
-                        ["product_id", "price_subtotal", "price_tax", "price_total", "price_unit", "product_qty", "product_uom_qty", "qty_invoiced", "qty_received"],
+                        [
+                            "product_id",
+                            "price_subtotal",
+                            "price_tax",
+                            "price_total",
+                            "price_unit",
+                            "product_qty",
+                            "qty_invoiced",
+                            "qty_received",
+                        ],
                     ],
                 )
 
                 for purchase_order_line in purchase_order_lines:
                     purchase_order_line["date_order"] = purchase_order["date_order"]
                     purchase_order_line["order_id"] = purchase_order["id"]
-                    purchase_order_line["product_name"] = purchase_order_line["product_id"][1]
-                    purchase_order_line["product_id"] = purchase_order_line["product_id"][0]
+                    purchase_order_line["product_name"] = purchase_order_line[
+                        "product_id"
+                    ][1]
+                    purchase_order_line["product_id"] = purchase_order_line[
+                        "product_id"
+                    ][0]
                     data_order_lines.append(purchase_order_line)
             else:
                 purchase_order_lines = []
@@ -280,8 +306,11 @@ class Odoo:
                     "create_date",
                     "theoritical_price",
                     "active",
+                    "label_ids",
                     "sale_ok",
                     "categ_id",
+                    "product_tmpl_id",
+                    "barcode",
                 ],
             ],
         )
@@ -289,6 +318,7 @@ class Odoo:
         for product in all_products:
             product["categ_name"] = product["categ_id"][1]
             product["categ_id"] = product["categ_id"][0]
+            product["product_tmpl_id"] = product["product_tmpl_id"][0]
 
         all_products = pd.DataFrame(all_products)
         all_products["create_date"] = pd.to_datetime(all_products["create_date"])
@@ -378,6 +408,7 @@ class Odoo:
             "search_read",
             [
                 [
+                    ["state", "=", "done"],
                     # Otsolab: Pertes
                     ["picking_type_id", "=", 14],
                     # Emplacements Virtuels/Pertes d'inventaire
@@ -403,7 +434,12 @@ class Odoo:
             ],
         )
 
+        for sm in stock_moves:
+            sm["location_id"] = sm["location_id"][0]
+            sm["product_id"] = sm["product_id"][0]
+
         result = pd.DataFrame(stock_moves)
+        result["date_expected"] = pd.to_datetime(result["date_expected"])
         self._set_cache(cache_key, result)
         return result
 
@@ -475,7 +511,7 @@ class Odoo:
             "search_read",
             [
                 # query
-                [], 
+                [],
                 # fields
                 [
                     "name",
@@ -489,7 +525,6 @@ class Odoo:
                 0,
                 0,
             ],
-
         )
 
         # Print the list of models with their names
