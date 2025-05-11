@@ -1,12 +1,8 @@
+import diskcache, json, logging, pandas as pd, pytz, sys, xmlrpc.client, yaml
+
+
 from datetime import datetime
 from re import search
-import diskcache
-import json
-import logging
-import pandas as pd
-import pytz
-import sys
-import xmlrpc.client
 
 banner = """
  ____ _____ ____  ____  _  __ ____  ____ 
@@ -20,6 +16,7 @@ banner = """
 class Odoo:
     XMLRPC_DEBUG = False
     DISABLE_CACHE = False
+    DISABLE_CACHE_GET = False
     SECONDS_IN_DAY = 60 * 60 * 24
 
     def __init__(
@@ -37,6 +34,7 @@ class Odoo:
         self.config_file = config_file
         self._uid = None
         self._cache = diskcache.Cache("cache")
+        self._cache.expire()
         logging.basicConfig(
             level=logging_level,  # Set minimum log level
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -109,22 +107,9 @@ class Odoo:
     def get_pos_orders(
         self, date_start, date_end: str = None, include_order_lines=True
     ):
-        if not (date_end):
-            date_end = date_start
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
-        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_start)):
-            datetime_start = f"{date_start} 00:00:00"
-        else:
-            datetime_start = date_start
-
-        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_end)):
-            datetime_end = f"{date_end} 23:59:59"
-        else:
-            datetime_end = date_end
-
-        logging.debug(
-            f"get_pos_orders {self._to_utc(datetime_start)} - {self._to_utc(datetime_end)}"
-        )
+        logging.debug(f"get_pos_orders {datetime_start} - {datetime_end}")
 
         cache_key = (
             f"get_pos_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
@@ -140,15 +125,20 @@ class Odoo:
             "search_read",
             [
                 [
-                    ["date_order", ">=", self._to_utc(datetime_start)],
-                    ["date_order", "<=", self._to_utc(datetime_end)],
-                    "|",
-                    "|",
-                    ["state", "=", "done"],
-                    ["state", "=", "paid"],
-                    ["state", "=", "invoiced"],
+                    ["date_order", ">=", datetime_start],
+                    ["date_order", "<=", datetime_end],
+                    ["state", "in", ["done", "paid", "invoiced"]],
                 ],
-                ["date_order", "partner_id", "amount_total", "state", "lines"],
+                [
+                    "date_order",
+                    "partner_id",
+                    "amount_total",
+                    "amount_tax",
+                    "amount_return",
+                    "amount_paid",
+                    "state",
+                    "lines",
+                ],
             ],
         )
 
@@ -164,7 +154,14 @@ class Odoo:
                     "search_read",
                     [
                         [["id", "in", pos_order["lines"]]],
-                        ["product_id", "price_subtotal_incl", "price_unit", "qty", "discount"],
+                        [
+                            "product_id",
+                            "price_subtotal",
+                            "price_subtotal_incl",
+                            "price_unit",
+                            "qty",
+                            "discount",
+                        ],
                     ],
                 )
 
@@ -184,30 +181,67 @@ class Odoo:
 
         if not (result[0].empty):
             self._set_cache(cache_key, result)
-        # else:
-        #     del self._cache[cache_key]
 
         return result
+
+    def get_report_pos_orders(self, date_start, date_end: str = None):
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+
+        logging.debug(f"get_report_pos_orders {datetime_start} - {datetime_end}")
+
+        cache_key = f"get_report_pos_orders-{datetime_start}-{datetime_end}"
+        if (cached_result := self._check_cache(cache_key)) is not None:
+            return cached_result
+
+        report_pos_orders = self.execute_kw(
+            "report.pos.order",
+            "search_read",
+            [
+                [
+                    ["date", ">=", datetime_start],
+                    ["date", "<=", datetime_end],
+                ],
+                [
+                    "date",
+                    "average_price",
+                    "invoiced",
+                    "nbr_lines",
+                    "price_sub_total",
+                    "price_total",
+                    "product_qty",
+                    "state",
+                    "total_discount",
+                    "order_id",
+                    "partner_id",
+                    # "product_categ_id",
+                    "product_id",
+                ],
+            ],
+        )
+
+        for pos_order in report_pos_orders:
+            if pos_order["partner_id"]:
+                pos_order["partner_id"] = pos_order["partner_id"][0]
+            else:
+                pos_order["partner_id"] = 0
+            pos_order["order_id"] = pos_order["order_id"][0]
+            pos_order["product_categ_id"] = pos_order["product_categ_id"][0]
+            pos_order["product_id"] = pos_order["product_id"][0]
+
+        report_pos_orders = pd.DataFrame(report_pos_orders)
+        report_pos_orders["date"] = pd.to_datetime(report_pos_orders["date"])
+
+        if not (report_pos_orders.empty):
+            self._set_cache(cache_key, report_pos_orders)
+
+        return report_pos_orders
 
     def get_purchase_orders(
         self, date_start, date_end: str = None, include_order_lines=True
     ):
-        if not (date_end):
-            date_end = date_start
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
-        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_start)):
-            datetime_start = f"{date_start} 00:00:00"
-        else:
-            datetime_start = date_start
-
-        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_end)):
-            datetime_end = f"{date_end} 23:59:59"
-        else:
-            datetime_end = date_end
-
-        logging.debug(
-            f"get_purchase_orders {self._to_utc(datetime_start)} - {self._to_utc(datetime_end)}"
-        )
+        logging.debug(f"get_purchase_orders {datetime_start} - {datetime_end}")
 
         cache_key = (
             f"get_purchase_orders-{datetime_start}-{datetime_end}-{include_order_lines}"
@@ -223,14 +257,16 @@ class Odoo:
             "search_read",
             [
                 [
-                    ["date_order", ">=", self._to_utc(datetime_start)],
-                    ["date_order", "<=", self._to_utc(datetime_end)],
+                    ["date_order", ">=", datetime_start],
+                    ["date_order", "<=", datetime_end],
+                    # ["state", "in", ["purchase", "done"]],
                 ],
                 [
                     "date_order",
                     "display_name",
                     "partner_id",
                     "amount_total",
+                    "amount_tax",
                     "amount_untaxed",
                     "invoice_status",
                     "state",
@@ -278,14 +314,13 @@ class Odoo:
                 purchase_order_lines = []
 
         orders = pd.DataFrame(data_orders)
+        orders = orders.drop("order_line", axis=1)
         orders["date_order"] = pd.to_datetime(orders["date_order"])
 
         result = [orders, pd.DataFrame(data_order_lines)]
 
         if not (result[0].empty):
             self._set_cache(cache_key, result)
-        # else:
-        #     del self._cache[cache_key]
 
         return result
 
@@ -299,7 +334,7 @@ class Odoo:
             "product.product",
             "search_read",
             [
-                ["|", ["active", "=", "true"], ["active", "=", "false"]],
+                ["|", ["active", "=", True], ["active", "=", False]],
                 [
                     "name",
                     "rack_location",
@@ -336,7 +371,7 @@ class Odoo:
             "res.partner",
             "search_read",
             [
-                [["is_member", "=", "true"]],
+                [["is_member", "=", True]],
                 [
                     "name",
                     "city",
@@ -365,7 +400,9 @@ class Odoo:
         return all_members
 
     def export_ventes(self, date_start, date_end):
-        cache_key = f"export_ventes-{date_start}-{date_end}"
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+
+        cache_key = f"export_ventes-{datetime_start}-{datetime_end}"
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
@@ -374,8 +411,8 @@ class Odoo:
             "search_read",
             [
                 [
-                    ["create_date", ">=", date_start.isoformat()],
-                    ["create_date", "<", date_end.isoformat()],
+                    ["create_date", ">=", datetime_start],
+                    ["create_date", "<", datetime_end],
                 ],
                 [
                     "order_id",
@@ -399,7 +436,9 @@ class Odoo:
         return result
 
     def export_pertes(self, date_start, date_end):
-        cache_key = f"export_pertes-{date_start}-{date_end}"
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+
+        cache_key = f"export_pertes-{datetime_start}-{datetime_end}"
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
@@ -417,8 +456,8 @@ class Odoo:
                         "=",
                         5,
                     ],
-                    ["date_expected", ">=", date_start.isoformat()],
-                    ["date_expected", "<", date_end.isoformat()],
+                    ["date_expected", ">=", date_start],
+                    ["date_expected", "<", date_end],
                 ],
                 [
                     "date_expected",
@@ -435,13 +474,149 @@ class Odoo:
         )
 
         for sm in stock_moves:
-            sm["location_id"] = sm["location_id"][0]
-            sm["product_id"] = sm["product_id"][0]
+            self._remove_odoo_id(sm, ["product_id", "location_id"])
 
         result = pd.DataFrame(stock_moves)
         result["date_expected"] = pd.to_datetime(result["date_expected"])
         self._set_cache(cache_key, result)
         return result
+
+    def get_account_invoices(self, date_start, date_end, include_invoice_lines=True):
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+
+        cache_key = f"get_invoices-{datetime_start}-{datetime_end}"
+        if (cached_result := self._check_cache(cache_key)) is not None:
+            return cached_result
+
+        invoices = self.execute_kw(
+            "account.invoice",
+            "search_read",
+            [
+                [
+                    ["date", ">=", datetime_start],
+                    ["date", "<", datetime_end],
+                    ["state", "not in", ["draft"]],
+                ],
+                [
+                    "amount_tax",
+                    "amount_total",
+                    "amount_untaxed",
+                    "date",
+                    "date_invoice",
+                    "invoice_line_ids",
+                    # "invoice_line_tax_ids",
+                    "number",
+                    "partner_id",
+                    "purchase_id",
+                    "state",
+                    "type",
+                ],
+            ],
+        )
+
+        invoice_line_ids = []
+        for invoice in invoices:
+            invoice_line_ids.extend(invoice["invoice_line_ids"])
+            self._remove_odoo_id(invoice, ["partner_id", "purchase_id"])
+
+        invoices = pd.DataFrame(invoices)
+
+        try:
+            invoices["date"] = pd.to_datetime(invoices["date"])
+            invoices["date_invoice"] = pd.to_datetime(invoices["date_invoice"])
+            # invoices["date_due"] = pd.to_datetime(invoices["date_due"])
+        except:
+            pass
+
+        if include_invoice_lines:
+            invoice_lines = self.execute_kw(
+                "account.invoice.line",
+                "search_read",
+                [
+                    [["id", "in", invoice_line_ids]],
+                    [
+                        "account_id",
+                        "invoice_id",
+                        "discount",
+                        "price_subtotal",
+                        "price_tax",
+                        "price_total",
+                        "price_unit",
+                        "quantity",
+                        "product_id",
+                    ],
+                ],
+            )
+
+            for invoice_line in invoice_lines:
+                self._remove_odoo_id(
+                    invoice_line, ["account_id", "invoice_id", "product_id"]
+                )
+
+            invoice_lines = pd.DataFrame(invoice_lines)
+        else:
+            invoice_lines = pd.DataFrame()
+
+        try:
+            invoices = invoices.drop("invoice_line_ids", axis=1)
+        except:
+            pass
+
+        result = [invoices, invoice_lines]
+
+        if not (result[0].empty):
+            self._set_cache(cache_key, result)
+
+        return result
+
+    def get_account_move_line(self, date_start, date_end):
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+
+        cache_key = f"get_account_move_line-{datetime_start}-{datetime_end}"
+        if (cached_result := self._check_cache(cache_key)) is not None:
+            return cached_result
+
+        move_lines = self.execute_kw(
+            "account.move.line",
+            "search_read",
+            [
+                [
+                    ["date", ">=", datetime_start],
+                    ["date", "<=", datetime_end],
+                    ["parent_state", "=", "posted"],
+                ],
+                [
+                    "journal_id",
+                    "date",
+                    "move_id",
+                    "account_id",
+                    "name",
+                    "debit",
+                    "credit",
+                ],
+            ],
+        )
+
+        for line in move_lines:
+            line["move_ref"] = line["move_id"][1]
+            self._remove_odoo_id(line, ["journal_id", "account_id", "move_id"])
+            if line["debit"] > 0:
+                line["dc_flag"] = "D"
+            else:
+                line["dc_flag"] = "C"
+
+        move_lines = pd.DataFrame(move_lines)
+        move_lines["date"] = pd.to_datetime(move_lines["date"])
+
+        if not (move_lines.empty):
+            self._set_cache(cache_key, move_lines)
+
+        return move_lines
+
+    def _remove_odoo_id(self, odoo_object, oddo_id_fields):
+        for odoo_field in oddo_id_fields:
+            if odoo_object[odoo_field]:
+                odoo_object[odoo_field] = odoo_object[odoo_field][0]
 
     # Liste des produits vendable d'un rayon. Cette liste peut servir de base à l'inventaire.
     def products_by_racks(self):
@@ -476,7 +651,7 @@ class Odoo:
         return result.shape
 
     def _check_cache(self, cache_key):
-        if Odoo.DISABLE_CACHE:
+        if Odoo.DISABLE_CACHE or Odoo.DISABLE_CACHE_GET:
             return None
 
         if cache_key in self._cache:
@@ -492,6 +667,30 @@ class Odoo:
         # expire time in seconds
         self._cache.set(cache_key, data, expire=expire)
 
+    def delete_cache_by_prefix(self, prefix):
+        count = 0
+        all_keys = list(self._cache)
+        for key in all_keys:
+            if isinstance(key, str) and key.startswith(prefix):
+                self._cache.delete(key)
+                count += 1
+        return count
+
+    def _interval_dates(self, date_start, date_end=None):
+        if date_end is None:
+            date_end = date_start
+
+        if isinstance(date_start, datetime):
+            return date_start, date_end
+
+        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_start)):
+            date_start = f"{date_start} 00:00:00"
+
+        if not (search(" \\d{2}:\\d{2}:\\d{2}$", date_end)):
+            date_end = f"{date_end} 23:59:59"
+
+        return self._to_utc(date_start), self._to_utc(date_end)
+
     def _to_utc(self, local_datetime_str: str):
         return self._local_tz.localize(
             datetime.strptime(local_datetime_str, "%Y-%m-%d %H:%M:%S")
@@ -502,17 +701,22 @@ class Odoo:
             datetime.strptime(utc_datetime_str, "%Y-%m-%d %H:%M:%S")
         ).astimezone(self._local_tz)
 
+    # deprecated
     def dump_model(self):
+        logging.warning("deprecated, use `dump_model_yaml` instead")
+        self.dump_model_yaml("output/odoo_model.yml")
+
+    def dump_model_yaml(self, output_file_path):
         if not (self._uid):
             self._connect()
+
+        yml_models = {}
 
         all_models = self.execute_kw(
             "ir.model",
             "search_read",
             [
-                # query
                 [],
-                # fields
                 [
                     "name",
                     "model",
@@ -527,11 +731,42 @@ class Odoo:
             ],
         )
 
+        ignored_models_category = (
+            "base_import.",
+            "change.password.",
+            "cleanup.",
+            "computed.",
+            "confirm.",
+            "date.range.",
+            "db.backup.",
+            "digest.",
+            "event.",
+            "im_livechat.",
+            "ir.actions.",
+            "link.",
+            "mail.",
+            "mass.editing.",
+            "report",
+            "replace",
+            "sms.",
+            "theme.",
+            "web_editor.",
+            "website.",
+            "wizard.",
+            "wiz.",
+        )
+
         # Print the list of models with their names
         for model in all_models:
-            print(f"- {model['model']}:")
-            print(f"  name: {model['name']}")
-            print(f"  fields:")
+            skip = False
+            for skipped in ignored_models_category:
+                if model["model"].startswith(skipped):
+                    skip = True
+                    break
+
+            if skip:
+                continue
+
             model_fields = model["field_id"]
             model_fields = self.execute_kw(
                 "ir.model.fields",
@@ -559,8 +794,25 @@ class Odoo:
                 ],
             )
 
-            for field in model_fields:
-                print(f"    - {field['name']}:")
-                for attr in field.keys():
-                    print(f"      {attr}: {field[attr]}")
-                print("\n")
+            for f in model_fields:
+                del f["id"]
+                if f["size"] == 0:
+                    del f["size"]
+                if f["relation_field"] == False:
+                    del f["relation_field"]
+                if f["relation"] == False:
+                    del f["relation"]
+                if f["required"] == False:
+                    del f["required"]
+                if f["readonly"] == False:
+                    del f["readonly"]
+                f["label"] = f["field_description"]
+                del f["field_description"]
+
+            yml_models[model["model"]] = {
+                "description": model["name"],
+                "fields": model_fields,
+            }
+
+        with open(output_file_path, "w") as yaml_file:
+            yaml.dump(yml_models, yaml_file)
