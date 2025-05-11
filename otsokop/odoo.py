@@ -1,4 +1,4 @@
-import diskcache, json, logging, os, pandas as pd, pytz, sys, xmlrpc.client, yaml
+import diskcache, logging, os, pandas as pd, pytz, sys, xmlrpc.client, yaml
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -21,7 +21,6 @@ class Odoo:
 
     def __init__(
         self,
-        config_file=None,
         *,
         server=None,
         database=None,
@@ -29,11 +28,10 @@ class Odoo:
         password=None,
         debug=None,
         timezone=None,
-        logging_level=logging.DEBUG,
+        logging_level=logging.INFO,
     ):
         load_dotenv()
 
-        self.config_file = config_file
         self._uid = None
         self._cache = diskcache.Cache("cache")
         self._cache.expire()
@@ -42,24 +40,16 @@ class Odoo:
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
-        # Load config from a JSON file
-        # Load configuration
-        config = {}
-        if config_file:
-            with open(config_file) as f:
-                config = json.load(f)
-            self.config_file = config_file
-
         # Set attributes with priority to directly passed parameters
-        self.url = server or os.getenv('ODOO_SERVER') or config.get("odoo.server")
-        self.db = database or os.getenv('ODOO_DATABASE') or config.get("odoo.database")
-        self.username = username or os.getenv('ODOO_USERNAME') or config.get("odoo.username")
-        self._password = password or os.getenv('ODOO_SECRET') or config.get("odoo.password")
+        self.url = server or os.getenv('ODOO_SERVER')
+        self.db = database or os.getenv('ODOO_DATABASE')
+        self.username = username or os.getenv('ODOO_USERNAME')
+        self._password = password or os.getenv('ODOO_SECRET')
         self.debug = (
-            debug if debug is not None else  Odoo._str_to_bool(os.getenv('ODOO_DEBUG')) or config.get("odoo.debug", Odoo.XMLRPC_DEBUG)
+            debug if debug is not None else  Odoo._str_to_bool(os.getenv('ODOO_DEBUG'))
         )
 
-        timezone_value = timezone or os.getenv("ODOO_TIMEZONE") or config.get("user.timezone")
+        timezone_value = timezone or os.getenv("ODOO_TIMEZONE")
         if timezone_value:
             self._local_tz = pytz.timezone(timezone_value)
         else:
@@ -73,7 +63,7 @@ class Odoo:
         if missing_params:
             raise ValueError(
                 f"Missing required parameters: {', '.join(missing_params)}. "
-                "Please provide them either through config file or as parameters."
+                "Please provide them either through .env file or as parameters."
             )
 
     def _connect(self):
