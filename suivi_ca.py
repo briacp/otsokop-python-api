@@ -26,7 +26,7 @@ FILE_PREFIX = "Suivi CA"
 MONEY_FORMAT = "#,##0.00 €"
 PERCENT_FORMAT = "0.00%"
 
-client = Odoo("app_settings.json")
+client = Odoo()
 
 all_products = client.get_all_products()
 print(all_products)

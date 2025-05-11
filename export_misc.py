@@ -3,8 +3,7 @@ from otsokop.odoo import banner as otsokop_banner
 import pandas as pd
 import sys
 
-client = Odoo("app_settings.json")
-
+client = Odoo()
 
 def main():
     print("misc export...")
@@ -12,8 +11,8 @@ def main():
     # stock_quant()
     # product_categories()
     # portal_users_stats()
-    # product_labels()
-    product_list()
+    product_labels()
+    # product_list()
 
 
 def product_list():

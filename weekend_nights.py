@@ -1,7 +1,7 @@
 from otsokop.odoo import Odoo
 import pandas as pd
 
-client = Odoo("app_settings.json")
+client = Odoo()
 
 cache_key = f"weekend_nights"
 if (cached_result := client._check_cache(cache_key)) is not None:

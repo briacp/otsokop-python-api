@@ -9,7 +9,7 @@ import simplekml as sk
 
 geolocator = BANFrance(user_agent="otsokop_geocode")
 print(otsokop_banner)
-client = Odoo("app_settings.json")
+client = Odoo()
 
 FETCH_ODOO = False
 OTSOKOP_COORDS = (43.502103, -1.468321)

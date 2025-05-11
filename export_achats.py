@@ -1,30 +1,14 @@
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from dotenv import load_dotenv
 from otsokop.odoo import Odoo
+import json
 import logging
 import os
-import sys
 import pandas as pd
-import json
+import sys
 
-try:
-    with open("app_settings.json") as f:
-        config = json.load(f)
-except Exception:
-    config = {}
-
-ODOO_SERVER = config.get("odoo.server") or os.getenv("ODOO_SERVER")
-ODOO_DB = config.get("odoo.database") or os.getenv("ODOO_DB")
-ODOO_USERNAME = config.get("odoo.username") or os.getenv("ODOO_USERNAME")
-ODOO_SECRET = config.get("odoo.password") or os.getenv("ODOO_SECRET")
-client = Odoo(
-    server=ODOO_SERVER,
-    database=ODOO_DB,
-    username=ODOO_USERNAME,
-    password=ODOO_SECRET,
-    logging_level=logging.INFO,
-)
-
+client = Odoo()
 
 def main():
     achats_df = client.get_purchase_orders(
@@ -32,6 +16,8 @@ def main():
     )
     achats_df[0].to_csv(f"output/achats_otsokop.csv", index=False)
     achats_df[1].to_csv(f"output/achats_details_otsokop.csv", index=False)
+    print(achats_df[0])
+    print(achats_df[1])
 
 
 def export_achats(current_date):

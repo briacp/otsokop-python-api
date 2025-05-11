@@ -3,6 +3,7 @@ from babel.numbers import format_decimal
 from datetime import date
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from dotenv import load_dotenv
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from otsokop.odoo import Odoo
@@ -11,7 +12,6 @@ import logging
 import os
 import smtplib
 import sys
-import json
 
 FR_HOLIDAYS = holidays.FR()
 LOCALE = "fr_FR"
@@ -21,23 +21,13 @@ MONTH_FORMAT = "MMMM'<br/>'yyyy"
 SEND_EMAIL = True
 INCLUDE_MEDIAN = False
 
-try:
-    with open("app_settings.json") as f:
-        config = json.load(f)
-except Exception:
-    config = {}
+load_dotenv()
 
-ODOO_SERVER = config.get("odoo.server") or os.getenv("ODOO_SERVER")
-ODOO_DB = config.get("odoo.database") or os.getenv("ODOO_DB")
-ODOO_USERNAME = config.get("odoo.username") or os.getenv("ODOO_USERNAME")
-ODOO_SECRET = config.get("odoo.password") or os.getenv("ODOO_SECRET")
-
-SENDER_EMAIL = config.get("email.sender") or os.getenv("SENDER_EMAIL")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 # comma separated list of recipients
-RECEIVER_EMAIL = config.get("email.recipient") or os.getenv("RECEIVER_EMAIL")
+RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 # generated with https://myaccount.google.com/apppasswords
-EMAIL_PASSWORD = config.get("email.password") or os.getenv("EMAIL_PASSWORD")
-
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 def main():
     date_start = (
@@ -97,13 +87,7 @@ def daily_stats(current_date):
         )
         return None
 
-    client = Odoo(
-        server=ODOO_SERVER,
-        database=ODOO_DB,
-        username=ODOO_USERNAME,
-        password=ODOO_SECRET,
-        logging_level=logging.INFO,
-    )
+    client = Odoo()
     order_dataframes = client.get_pos_orders(
         current_date.strftime("%Y-%m-%d"), include_order_lines=False
     )
@@ -143,13 +127,7 @@ def monthly_stats(current_date):
     content = []
     end_date = current_date + relativedelta(months=1, days=-1)
 
-    client = Odoo(
-        server=ODOO_SERVER,
-        database=ODOO_DB,
-        username=ODOO_USERNAME,
-        password=ODOO_SECRET,
-        logging_level=logging.INFO,
-    )
+    client = Odoo()
     order_dataframes = client.get_pos_orders(
         current_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
     )

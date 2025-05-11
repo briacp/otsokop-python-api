@@ -11,21 +11,9 @@ import logging
 import os
 import smtplib
 import sys
-import json
 
 MONTH_FORMAT = "MMMM' 'yyyy"
 LOCALE = "fr_FR"
-try:
-    with open("app_settings.json") as f:
-        config = json.load(f)
-except Exception:
-    config = {}
-
-ODOO_SERVER = config.get("odoo.server") or os.getenv("ODOO_SERVER")
-ODOO_DB = config.get("odoo.database") or os.getenv("ODOO_DB")
-ODOO_USERNAME = config.get("odoo.username") or os.getenv("ODOO_USERNAME")
-ODOO_SECRET = config.get("odoo.password") or os.getenv("ODOO_SECRET")
-
 
 def main():
     for year in (2023, 2024, 2025):
@@ -38,13 +26,7 @@ def monthly_stats(current_date):
     content = []
     end_date = current_date + relativedelta(months=1, days=-1)
 
-    client = Odoo(
-        server=ODOO_SERVER,
-        database=ODOO_DB,
-        username=ODOO_USERNAME,
-        password=ODOO_SECRET,
-        logging_level=logging.INFO,
-    )
+    client = Odoo()
 
     order_dataframes = client.get_pos_orders(
         current_date.strftime("%Y-%m-%d"),

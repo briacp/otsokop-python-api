@@ -1,6 +1,6 @@
-import diskcache, json, logging, pandas as pd, pytz, sys, xmlrpc.client, yaml
+import diskcache, json, logging, os, pandas as pd, pytz, sys, xmlrpc.client, yaml
 
-
+from dotenv import load_dotenv
 from datetime import datetime
 from re import search
 
@@ -31,12 +31,14 @@ class Odoo:
         timezone=None,
         logging_level=logging.DEBUG,
     ):
+        load_dotenv()
+
         self.config_file = config_file
         self._uid = None
         self._cache = diskcache.Cache("cache")
         self._cache.expire()
         logging.basicConfig(
-            level=logging_level,  # Set minimum log level
+            level=Odoo._set_log_level(os.getenv('LOGGING_LEVEL') or 'INFO'),
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
@@ -49,15 +51,15 @@ class Odoo:
             self.config_file = config_file
 
         # Set attributes with priority to directly passed parameters
-        self.url = server or config.get("odoo.server")
-        self.db = database or config.get("odoo.database")
-        self.username = username or config.get("odoo.username")
-        self._password = password or config.get("odoo.password")
+        self.url = server or os.getenv('ODOO_SERVER') or config.get("odoo.server")
+        self.db = database or os.getenv('ODOO_DATABASE') or config.get("odoo.database")
+        self.username = username or os.getenv('ODOO_USERNAME') or config.get("odoo.username")
+        self._password = password or os.getenv('ODOO_SECRET') or config.get("odoo.password")
         self.debug = (
-            debug if debug is not None else config.get("odoo.debug", Odoo.XMLRPC_DEBUG)
+            debug if debug is not None else  Odoo._str_to_bool(os.getenv('ODOO_DEBUG')) or config.get("odoo.debug", Odoo.XMLRPC_DEBUG)
         )
 
-        timezone_value = timezone or config.get("user.timezone")
+        timezone_value = timezone or os.getenv("ODOO_TIMEZONE") or config.get("user.timezone")
         if timezone_value:
             self._local_tz = pytz.timezone(timezone_value)
         else:
@@ -569,10 +571,10 @@ class Odoo:
 
         return result
 
-    def get_account_move_line(self, date_start, date_end):
+    def get_account_move_lines(self, date_start, date_end):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
-        cache_key = f"get_account_move_line-{datetime_start}-{datetime_end}"
+        cache_key = f"get_account_move_lines-{datetime_start}-{datetime_end}"
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
@@ -816,3 +818,16 @@ class Odoo:
 
         with open(output_file_path, "w") as yaml_file:
             yaml.dump(yml_models, yaml_file)
+
+    def _str_to_bool(value):
+        return value and value.lower() == "true"
+    
+
+    def _set_log_level(level_name):
+        level_name = level_name.upper()
+        level = getattr(logging, level_name, None)
+        
+        if level is None:
+            raise ValueError(f"Invalid log level: {level_name}")
+
+        logging.getLogger().setLevel(level)
