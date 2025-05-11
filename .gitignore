@@ -2,3 +2,4 @@ app_settings.json
 cache/
 __pycache__
 output/
+resources/
