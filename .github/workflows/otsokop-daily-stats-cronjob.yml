@@ -29,7 +29,7 @@ jobs:
     - name: Execute the daily stats script
       env:
         ODOO_SERVER: ${{ secrets.ODOO_SERVER }}
-        ODOO_DB: ${{ secrets.ODOO_DB }}
+        ODOO_DATABASE: ${{ secrets.ODOO_DATABASE }}
         ODOO_USERNAME: ${{ secrets.ODOO_USERNAME }}
         ODOO_SECRET: ${{ secrets.ODOO_SECRET }}
         SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
