@@ -9,6 +9,7 @@ import json
 
 client = Odoo()
 
+
 def main():
     dfs = []
     for year in range(2023, 2026):
@@ -26,7 +27,7 @@ def main():
 def export_pertes(current_date):
     end_date = current_date + relativedelta(months=1, days=-1)
     print(f"export pertes {current_date}, {end_date}")
-    return client.export_pertes(current_date, end_date)
+    return client.get_product_losses(current_date, end_date)
 
 
 if __name__ == "__main__":

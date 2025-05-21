@@ -36,17 +36,17 @@ class Odoo:
         self._cache = diskcache.Cache("cache")
         self._cache.expire()
         logging.basicConfig(
-            level=Odoo._set_log_level(os.getenv('LOGGING_LEVEL') or 'INFO'),
+            level=Odoo._set_log_level(os.getenv("LOGGING_LEVEL") or "INFO"),
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
         # Set attributes with priority to directly passed parameters
-        self.url = server or os.getenv('ODOO_SERVER')
-        self.db = database or os.getenv('ODOO_DATABASE')
-        self.username = username or os.getenv('ODOO_USERNAME')
-        self._password = password or os.getenv('ODOO_SECRET')
+        self.url = server or os.getenv("ODOO_SERVER")
+        self.db = database or os.getenv("ODOO_DATABASE")
+        self.username = username or os.getenv("ODOO_USERNAME")
+        self._password = password or os.getenv("ODOO_SECRET")
         self.debug = (
-            debug if debug is not None else  Odoo._str_to_bool(os.getenv('ODOO_DEBUG'))
+            debug if debug is not None else Odoo._str_to_bool(os.getenv("ODOO_DEBUG"))
         )
 
         timezone_value = timezone or os.getenv("ODOO_TIMEZONE")
@@ -268,9 +268,8 @@ class Odoo:
         )
 
         for purchase_order in purchase_orders:
-            partner = purchase_order["partner_id"] or [0, None]
-            purchase_order["partner_id"] = partner[0]
-            purchase_order["partner_name"] = partner[1]
+            supplier = purchase_order["partner_id"] or [0, None]
+            purchase_order["partner_id"] = supplier[0]
             data_orders.append(purchase_order)
 
             if include_order_lines:
@@ -306,6 +305,8 @@ class Odoo:
                 purchase_order_lines = []
 
         orders = pd.DataFrame(data_orders)
+        orders = orders.rename(columns={"partner_id": "supplier_id"})
+
         orders = orders.drop("order_line", axis=1)
         orders["date_order"] = pd.to_datetime(orders["date_order"])
 
@@ -348,6 +349,10 @@ class Odoo:
             product["product_tmpl_id"] = product["product_tmpl_id"][0]
 
         all_products = pd.DataFrame(all_products)
+        self._set_zeros_to_none(
+            all_products, ["barcode", "rack_location", "theoritical_price"]
+        )
+
         all_products["create_date"] = pd.to_datetime(all_products["create_date"])
 
         self._set_cache("get_all_products", all_products, Odoo.SECONDS_IN_DAY)
@@ -391,46 +396,55 @@ class Odoo:
 
         return all_members
 
-    def export_ventes(self, date_start, date_end):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+    def get_suppliers(self):
+        logging.debug("Getting the list of partners...")
 
-        cache_key = f"export_ventes-{datetime_start}-{datetime_end}"
+        cache_key = f"get_suppliers"
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
-        pos_order_lines = self.execute_kw(
-            "pos.order.line",
+        suppliers = self.execute_kw(
+            "res.partner",
             "search_read",
             [
+                [["supplier", "=", True]],
                 [
-                    ["create_date", ">=", datetime_start],
-                    ["create_date", "<", datetime_end],
-                ],
-                [
-                    "order_id",
+                    "name",
+                    "city",
+                    "street",
+                    "street2",
+                    "function",
+                    "mobile",
+                    "email",
+                    "purchase_target",
+                    "default_supplierinfo_discount",
                     "create_date",
-                    "product_id",
-                    "qty",
-                    "price_subtotal_incl",
-                    "discount",
                 ],
-                0,  # offset
-                0,  # limit
-                "product_id,id",
+            ],
+        )
+        suppliers = pd.DataFrame(suppliers)
+        self._set_zeros_to_none(
+            suppliers,
+            [
+                "city",
+                "street",
+                "street2",
+                "function",
+                "mobile",
+                "email",
+                "purchase_target",
+                "default_supplierinfo_discount",
             ],
         )
 
-        result = pd.DataFrame(pos_order_lines)
+        self._set_cache(cache_key, suppliers, Odoo.SECONDS_IN_DAY)
 
-        result["create_date"] = pd.to_datetime(result["create_date"])
+        return suppliers
 
-        self._set_cache(cache_key, result)
-        return result
-
-    def export_pertes(self, date_start, date_end):
+    def get_product_losses(self, date_start, date_end):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
-        cache_key = f"export_pertes-{datetime_start}-{datetime_end}"
+        cache_key = f"get_product_losses-{datetime_start}-{datetime_end}"
         if (cached_result := self._check_cache(cache_key)) is not None:
             return cached_result
 
@@ -512,6 +526,7 @@ class Odoo:
             self._remove_odoo_id(invoice, ["partner_id", "purchase_id"])
 
         invoices = pd.DataFrame(invoices)
+        self._set_zeros_to_none(invoices, ["purchase_id"])
 
         try:
             invoices["date"] = pd.to_datetime(invoices["date"])
@@ -546,6 +561,7 @@ class Odoo:
                 )
 
             invoice_lines = pd.DataFrame(invoice_lines)
+            self._set_zeros_to_none(invoice_lines, ["product_id"])
         else:
             invoice_lines = pd.DataFrame()
 
@@ -609,6 +625,10 @@ class Odoo:
         for odoo_field in oddo_id_fields:
             if odoo_object[odoo_field]:
                 odoo_object[odoo_field] = odoo_object[odoo_field][0]
+
+    def _set_zeros_to_none(self, df, oddo_fields):
+        for odoo_field in oddo_fields:
+            df[odoo_field].replace(to_replace=0, value=pd.NA, inplace=True)
 
     # Liste des produits vendable d'un rayon. Cette liste peut servir de base à l'inventaire.
     def products_by_racks(self):
@@ -807,16 +827,15 @@ class Odoo:
             }
 
         with open(output_file_path, "w") as yaml_file:
-            yaml.dump(yml_models, yaml_file)
+            yaml.dump([yml_models], yaml_file)
 
     def _str_to_bool(value):
         return value and value.lower() == "true"
-    
 
     def _set_log_level(level_name):
         level_name = level_name.upper()
         level = getattr(logging, level_name, None)
-        
+
         if level is None:
             raise ValueError(f"Invalid log level: {level_name}")
 

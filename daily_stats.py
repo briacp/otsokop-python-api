@@ -29,6 +29,7 @@ RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 # generated with https://myaccount.google.com/apppasswords
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
+
 def main():
     date_start = (
         sys.argv[1]

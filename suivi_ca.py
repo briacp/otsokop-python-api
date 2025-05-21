@@ -54,8 +54,7 @@ print(all_products)
 
 # });
 
-
-export_ventes = client.export_ventes(start_date, end_date)
+export_ventes = client.get_pos_orders(start_date, end_date, include_order_lines=True)
 print(export_ventes)
-export_pertes = client.export_pertes(start_date, end_date)
+export_pertes = client.get_product_losses(start_date, end_date)
 print(export_pertes)

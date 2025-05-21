@@ -10,6 +10,7 @@ import sys
 
 client = Odoo()
 
+
 def main():
     achats_df = client.get_purchase_orders(
         "2025-03-01", "2025-03-31", include_order_lines=True

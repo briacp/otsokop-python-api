@@ -15,6 +15,7 @@ import sys
 MONTH_FORMAT = "MMMM' 'yyyy"
 LOCALE = "fr_FR"
 
+
 def main():
     for year in (2023, 2024, 2025):
         for month in (1, 2, 3):

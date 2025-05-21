@@ -4,7 +4,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from otsokop.odoo import Odoo
-from sqlalchemy import inspect, MetaData
+from sqlalchemy import inspect
 from sqlalchemy.sql import text
 
 start_date = "2022-01-01"
@@ -15,6 +15,7 @@ INCLUDE_PRODUCT_PRICE_HISTORY = False
 
 client = Odoo()
 engine = sa.create_engine(os.getenv("MYSQL_ENGINE"))
+
 
 def iterate_months(start_date, end_date):
     current_date = start_date.replace(day=1)
@@ -46,8 +47,6 @@ def truncate_tables():
 
 def add_constraints():
     inspector = inspect(engine)
-    metadata = MetaData()
-    metadata.reflect(bind=engine)
 
     tables_to_alter = {}
     all_tables = inspector.get_table_names()
@@ -65,6 +64,8 @@ def add_constraints():
                 referenced_table = col_name[:-3]  # Remove '_id' suffix
                 if referenced_table in all_tables:
                     potential_fks.append((col_name, referenced_table))
+                else:
+                    logging.info(f"No FK for `{col_name}` in `{table_name}`")
 
         if needs_pk or potential_fks:
             tables_to_alter[table_name] = {
@@ -75,7 +76,6 @@ def add_constraints():
     with engine.begin() as conn:
         # First loop to add PK
         for table_name, info in tables_to_alter.items():
-            table = metadata.tables[table_name]
             if info["needs_pk"]:
                 try:
                     conn.execute(
@@ -87,7 +87,6 @@ def add_constraints():
 
         # Second loop to add FK
         for table_name, info in tables_to_alter.items():
-            table = metadata.tables[table_name]
             for fk_col, ref_table in info["potential_fks"]:
                 try:
                     constraint_name = f"fk_{table_name}_{ref_table}"
@@ -247,6 +246,24 @@ def main(start_date, end_date):
     dump_mysql(df, "label")
 
     # -------------------------------------------------------------------------
+    # Table `location`
+
+    logging.info("Export `stock_location` table...")
+
+    df = pd.DataFrame(
+        client.execute_kw(
+            "stock.location",
+            "search_read",
+            [
+                [],
+                ["name", "comment"],
+            ],
+        )
+    )
+    df["comment"].replace(to_replace=0, value=pd.NA, inplace=True)
+    dump_mysql(df, "stock_location")
+
+    # -------------------------------------------------------------------------
     # Table `product_price_history`
 
     if INCLUDE_PRODUCT_PRICE_HISTORY:
@@ -300,13 +317,22 @@ def main(start_date, end_date):
     dump_mysql(df, "member")
 
     # -------------------------------------------------------------------------
-    # Table `loss`
+    # Table `supplier`
+
+    logging.info("Export `supplier` table...")
+
+    df = client.get_suppliers()
+    dump_mysql(df, "supplier")
+
+    # -------------------------------------------------------------------------
+    # Table `product_loss`
 
     logging.info("Export `loss` table...")
 
-    df = client.export_pertes(start_date, end_date)
+    df = client.get_product_losses(start_date, end_date)
     df = df.drop("name", axis=1)
-    dump_mysql(df, "loss")
+    df = df.rename(columns={"location_id": "stock_location_id"})
+    dump_mysql(df, "product_loss")
 
     # loop for each month to avoid requesting huge amount of data in a single
     # call.
@@ -388,7 +414,8 @@ def main(start_date, end_date):
         f"""Create a SQL dump with the following command:
     mysqldump --skip-lock-tables --routines --add-drop-table --disable-keys --extended-insert -u {os.getenv('MYSQL_USERNAME')}  -p{os.getenv('MYSQL_PASSWORD')} --host={os.getenv('MYSQL_HOST')} --port={os.getenv('MYSQL_PORT')} --protocol tcp {os.getenv('MYSQL_DATABASE')} | gzip -c > /tmp/{os.getenv('MYSQL_DATABASE')}.sql.gz
 
-    """)
+    """
+    )
 
 
 if __name__ == "__main__":

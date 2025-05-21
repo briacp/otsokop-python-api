@@ -5,14 +5,23 @@ import sys
 
 client = Odoo()
 
+
 def main():
     print("misc export...")
     # stock_picking()
     # stock_quant()
     # product_categories()
     # portal_users_stats()
-    product_labels()
+    # product_labels()
     # product_list()
+    misc()
+
+
+def misc():
+    # client.dump_model_yaml("output/odoo_model.yaml")
+    suppliers = client.get_suppliers()
+    suppliers.to_excel("output/suppliers.xlsx", index=False)
+    print("done")
 
 
 def product_list():
