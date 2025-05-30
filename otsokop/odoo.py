@@ -13,13 +13,10 @@ banner = """
 \____/ \_/ \____/\____/\_|\_\\\____/\_/   
 """
 
-ONE_DAY = 60 * 60 * 24
-
 
 class Odoo:
-    XMLRPC_DEBUG = False
     DISABLE_CACHE = False
-    DISABLE_CACHE_GET = False
+    ONE_DAY = 60 * 60 * 24
 
     def __init__(
         self,
@@ -34,7 +31,6 @@ class Odoo:
     ):
         load_dotenv()
 
-        self._uid = None
         self._cache = diskcache.Cache("cache")
         self._cache.expire()
         logging.basicConfig(
@@ -43,6 +39,7 @@ class Odoo:
         )
 
         # Set attributes with priority to directly passed parameters
+        self._uid = None
         self.url = server or os.getenv("ODOO_SERVER")
         self.db = database or os.getenv("ODOO_DATABASE")
         self.username = username or os.getenv("ODOO_USERNAME")
@@ -104,8 +101,6 @@ class Odoo:
     ):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
-        logging.debug(f"get_pos_orders {datetime_start} - {datetime_end}")
-
         data_orders = []
         data_order_lines = []
 
@@ -165,6 +160,7 @@ class Odoo:
 
         orders = pd.DataFrame(data_orders)
         orders["date_order"] = pd.to_datetime(orders["date_order"])
+        self._set_zeros_to_none(orders, ["partner_id"])
 
         result = [orders, pd.DataFrame(data_order_lines)]
 
@@ -343,7 +339,7 @@ class Odoo:
 
     @odoo_cache(ttl=ONE_DAY)
     def get_partners(self):
-        partners = self.execute_kw(
+        results = self.execute_kw(
             "res.partner",
             "search_read",
             [
@@ -374,9 +370,8 @@ class Odoo:
                 ],
             ],
         )
-        partners = pd.DataFrame(partners)
-
-        return partners
+        results = pd.DataFrame(results)
+        return results
 
     @odoo_cache()
     def get_product_losses(self, date_start, date_end):
@@ -791,7 +786,7 @@ class Odoo:
             df[odoo_field].replace(to_replace=0, value=pd.NA, inplace=True)
 
     def _check_cache(self, cache_key):
-        if Odoo.DISABLE_CACHE or Odoo.DISABLE_CACHE_GET:
+        if Odoo.DISABLE_CACHE:
             return None
 
         if cache_key in self._cache:
@@ -843,11 +838,6 @@ class Odoo:
         return pytz.utc.localize(
             datetime.strptime(utc_datetime_str, "%Y-%m-%d %H:%M:%S")
         ).astimezone(self._local_tz)
-
-    # deprecated
-    def dump_model(self):
-        logging.warning("deprecated, use `dump_model_yaml` instead")
-        self.dump_model_yaml("output/odoo_model.yml")
 
     def dump_model_yaml(self, output_file_path):
         if not (self._uid):
