@@ -4,13 +4,13 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from otsokop.odoo import Odoo
-from sqlalchemy import inspect
+from sqlalchemy import inspect, VARCHAR
 from sqlalchemy.sql import text
 
-start_date = "2022-01-01"
+start_date = "2021-01-01"
 end_date = "2025-05-01"
 
-INCLUDE_PRODUCT_TEMPLATE = False
+INCLUDE_PRODUCT_TEMPLATE = True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
 
 client = Odoo()
@@ -24,13 +24,8 @@ def iterate_months(start_date, end_date):
         current_date += relativedelta(months=1)
 
 
-def dump_mysql(df, table_name):
-    df.to_sql(
-        name=table_name,
-        con=engine,
-        if_exists="append",
-        index=False,
-    )
+def dump_mysql(df, table_name, dtype=None):
+    df.to_sql(name=table_name, con=engine, if_exists="append", index=False, dtype=dtype)
 
 
 def truncate_tables():
@@ -117,20 +112,20 @@ def main(start_date, end_date):
     truncate_tables()
 
     # -------------------------------------------------------------------------
-    # Table `rack`
+    # Table `product_rack`
 
-    logging.info("Export `rack` table...")
+    logging.info("Export `product_rack` table...")
     df = pd.read_csv("resources/racks.tsv", sep="\t")
-    dump_mysql(df, "rack")
+    dump_mysql(df, "product_rack", {"code": VARCHAR(25)})
 
     # -------------------------------------------------------------------------
     # Tables `product` & `product_label`
 
     logging.info("Export `product` & `product_label` tables...")
 
-    df = client.get_all_products()
-    df = df.drop("categ_name", axis=1)
-    template_labels = pd.DataFrame(columns=["product_id", "label_id"])
+    df = client.get_products()
+
+    template_labels = pd.DataFrame(columns=["product_id", "product_label_id"])
     for _, row in df.iterrows():
         for l in row["label_ids"]:
             template_labels = pd.concat(
@@ -141,54 +136,24 @@ def main(start_date, end_date):
                 ignore_index=True,
             )
     df = df.drop("label_ids", axis=1)
-    df = df.rename(
-        columns={
-            "categ_id": "category_id",
-            "product_tmpl_id": "product_template_id",
-        }
-    )
-    dump_mysql(df, "product")
-    dump_mysql(template_labels, "product_label")
+
+    if not INCLUDE_PRODUCT_TEMPLATE:
+        df = df.drop("product_template_id", axis=1)
+
+    dump_mysql(df, "product", {"rack_code": VARCHAR(25)})
+    dump_mysql(template_labels, "map_product_label_product")
 
     # -------------------------------------------------------------------------
     # Table `account_journal`
 
     logging.info("Export `account_journal` table...")
-    journals = pd.DataFrame(
-        client.execute_kw(
-            "account.journal",
-            "search_read",
-            [
-                [],
-                ["code", "name"],
-            ],
-        )
-    )
-    dump_mysql(journals, "account_journal")
+    dump_mysql(client.get_account_journals(), "account_journal")
 
     # -------------------------------------------------------------------------
     # Table `account`
 
     logging.info("Export `account` table...")
-
-    accounts = client.execute_kw(
-        "account.account",
-        "search_read",
-        [
-            [],
-            [
-                "id",
-                "code",
-                "name",
-                "user_type_id",
-            ],
-        ],
-    )
-    for r in accounts:
-        r["user_type"] = r["user_type_id"][1] if r["user_type_id"] else None
-        r["user_type_id"] = r["user_type_id"][0] if r["user_type_id"] else None
-
-    dump_mysql(pd.DataFrame(accounts), "account")
+    dump_mysql(client.get_accounts(), "account")
 
     # -------------------------------------------------------------------------
     # Table `product_template` & `product_template_label`
@@ -196,143 +161,54 @@ def main(start_date, end_date):
 
         logging.info("Export `product_template` & `product_template_label` tables...")
 
-        templates = client.execute_kw(
-            "product.template",
-            "search_read",
-            [
-                ["|", ["active", "=", True], ["active", "=", False]],
-                [
-                    "name",
-                    "active",
-                    "available_in_pos",
-                    "storage",
-                    "sale_ok",
-                    "label_ids",
-                ],
-            ],
-        )
+        templates = client.get_product_templates()
 
-        template_labels = pd.DataFrame(columns=["product_template_id", "label_id"])
-        for t in templates:
-            for l in t["label_ids"]:
+        template_labels = pd.DataFrame(
+            columns=["product_template_id", "product_label_id"]
+        )
+        for t in templates.itertuples(index=False):
+            for l in t.label_ids:
                 template_labels = pd.concat(
                     [
-                        pd.DataFrame([[t["id"], l]], columns=template_labels.columns),
+                        pd.DataFrame([[t.id, l]], columns=template_labels.columns),
                         template_labels,
                     ],
                     ignore_index=True,
                 )
         dump_mysql(template_labels, "product_template_label")
 
-        df = pd.DataFrame(templates)
-        df = df.drop("label_ids", axis=1)
-        dump_mysql(df, "product_template")
+        templates = templates.drop("label_ids", axis=1)
+        dump_mysql(templates, "product_template")
 
     # -------------------------------------------------------------------------
-    # Table `label`
+    # Table `product_label`
 
-    logging.info("Export `label` table...")
-
-    df = pd.DataFrame(
-        client.execute_kw(
-            "product.label",
-            "search_read",
-            [
-                [],
-                ["code", "name"],
-            ],
-        )
-    )
-    dump_mysql(df, "label")
+    logging.info("Export `product_label` table...")
+    dump_mysql(client.get_product_labels(), "product_label")
 
     # -------------------------------------------------------------------------
-    # Table `location`
+    # Table `stock_location`
 
     logging.info("Export `stock_location` table...")
-
-    df = pd.DataFrame(
-        client.execute_kw(
-            "stock.location",
-            "search_read",
-            [
-                [],
-                ["name", "comment"],
-            ],
-        )
-    )
-    df["comment"].replace(to_replace=0, value=pd.NA, inplace=True)
-    dump_mysql(df, "stock_location")
+    dump_mysql(client.get_stock_locations(), "stock_location")
 
     # -------------------------------------------------------------------------
-    # Table `product_price_history`
+    # Table `product_category`
 
-    if INCLUDE_PRODUCT_PRICE_HISTORY:
-
-        logging.info("Export `product_price_history` table...")
-
-        price_history = client.execute_kw(
-            "product.price.history",
-            "search_read",
-            [
-                [],
-                ["create_date", "cost", "product_id"],
-            ],
-        )
-        for r in price_history:
-            r["product_id"] = r["product_id"][0] if r["product_id"] else None
-        df = pd.DataFrame(price_history)
-        dump_mysql(df, "product_price_history")
+    logging.info("Export `product_category` table...")
+    dump_mysql(client.get_product_categories(), "product_category")
 
     # -------------------------------------------------------------------------
-    # Table `category`
+    # Table `partner`
 
-    logging.info("Export `category` table...")
-
-    categories = client.execute_kw(
-        "product.category",
-        "search_read",
-        [
-            [],
-            [
-                "id",
-                "display_name",
-                "parent_id",
-                # "product_count",
-            ],
-        ],
-    )
-    for r in categories:
-        r["parent_id"] = r["parent_id"][0] if r["parent_id"] else None
-
-    categories = pd.DataFrame(categories)
-    categories = categories.rename(columns={"display_name": "name"})
-    dump_mysql(categories, "category")
-
-    # -------------------------------------------------------------------------
-    # Table `member`
-
-    logging.info("Export `member` table...")
-
-    df = client.get_all_members()
-    dump_mysql(df, "member")
-
-    # -------------------------------------------------------------------------
-    # Table `supplier`
-
-    logging.info("Export `supplier` table...")
-
-    df = client.get_suppliers()
-    dump_mysql(df, "supplier")
+    logging.info("Export `partner` table...")
+    dump_mysql(client.get_partners(), "partner")
 
     # -------------------------------------------------------------------------
     # Table `product_loss`
 
-    logging.info("Export `loss` table...")
-
-    df = client.get_product_losses(start_date, end_date)
-    df = df.drop("name", axis=1)
-    df = df.rename(columns={"location_id": "stock_location_id"})
-    dump_mysql(df, "product_loss")
+    logging.info("Export `product_loss` table...")
+    dump_mysql(client.get_product_losses(start_date, end_date), "product_loss")
 
     # loop for each month to avoid requesting huge amount of data in a single
     # call.
@@ -345,7 +221,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `pos_order_detail`
 
-        logging.info("    - pos_order_detail")
+        logging.info(".   * pos_order_detail")
 
         df = client.get_pos_orders(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
@@ -359,7 +235,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `pos_order`
 
-        logging.info("    - pos_order")
+        logging.info(".   * pos_order")
 
         df = df[0].drop("lines", axis=1)
         df = df.drop("partner_name", axis=1)
@@ -368,7 +244,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `purchase_detail`
 
-        logging.info("    - purchase_order_detail")
+        logging.info(".   * purchase_order_detail")
 
         df = client.get_purchase_orders(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
@@ -387,7 +263,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `account_invoice`
 
-        logging.info("    - acount_invoice & account_invoice_line")
+        logging.info(".   * acount_invoice & account_invoice_line")
 
         invoices = client.get_account_invoices(
             month_date.strftime("%Y-%m-%d"),
@@ -401,14 +277,56 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `account_move_line`
 
-        logging.info("    - account_move_line")
+        logging.info(".   * account_move_line")
 
         account_move_line = client.get_account_move_lines(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
         dump_mysql(account_move_line, "account_move_line")
 
+        # ---------------------------------------------------------------------
+        # Table `stock_move_line`
+
+        logging.info(".   * stock_move_line")
+        stock_move_line = client.get_stock_move_lines(
+            month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+        )
+        dump_mysql(stock_move_line, "stock_move_line")
+
+        # ---------------------------------------------------------------------
+        # Table `product_history`
+
+        logging.info(".   * product_history")
+
+        result = client.get_product_history(
+            month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+        )
+        dump_mysql(result, "product_history")
+
     add_constraints()
+
+    # manual FK
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE product_rack ADD PRIMARY KEY (code)"))
+
+        conn.execute(
+            text(
+                "ALTER TABLE stock_move_line ADD CONSTRAINT fk_stock_move_line_location_dest_id FOREIGN KEY (dest_stock_location_id)  REFERENCES stock_location(id)"
+            )
+        )
+
+        # conn.execute(
+        #     text(
+        #         "ALTER TABLE product ADD CONSTRAINT fk_product_rack FOREIGN KEY (rack_code)  REFERENCES rack(code)"
+        #     )
+        # )
+
+        # conn.execute(
+        #     text(
+        #         "ALTER TABLE category ADD CONSTRAINT fk_category_parent_id FOREIGN KEY (parent_id)  REFERENCES category(id)"
+        #     )
+        # )
+
     logging.info("Dump complete")
     logging.info(
         f"""Create a SQL dump with the following command:
