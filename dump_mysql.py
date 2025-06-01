@@ -8,7 +8,7 @@ from sqlalchemy import inspect, VARCHAR
 from sqlalchemy.sql import text
 
 start_date = "2021-01-01"
-end_date = "2025-05-01"
+end_date = "2025-05-31"
 
 INCLUDE_PRODUCT_TEMPLATE = True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
@@ -104,6 +104,10 @@ def add_constraints():
                     )
 
 
+def execute_sql(conn, sql):
+    conn.execute(text(sql))
+
+
 def main(start_date, end_date):
     start_date = datetime.strptime(start_date, "%Y-%m-%d")
     end_date = datetime.strptime(end_date, "%Y-%m-%d")
@@ -140,7 +144,7 @@ def main(start_date, end_date):
     if not INCLUDE_PRODUCT_TEMPLATE:
         df = df.drop("product_template_id", axis=1)
 
-    dump_mysql(df, "product", {"rack_code": VARCHAR(25)})
+    dump_mysql(df, "product", {"product_rack_code": VARCHAR(25)})
     dump_mysql(template_labels, "map_product_label_product")
 
     # -------------------------------------------------------------------------
@@ -198,6 +202,12 @@ def main(start_date, end_date):
     logging.info("Export `product_category` table...")
     dump_mysql(client.get_product_categories(), "product_category")
 
+    logging.info("Export `stock_picking_type` table...")
+    dump_mysql(client.get_stock_picking_types(), "stock_picking_type")
+
+    logging.info("Export `uom` table...")
+    dump_mysql(client.get_uoms(), "uom")
+
     # -------------------------------------------------------------------------
     # Table `partner`
 
@@ -221,7 +231,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `pos_order_detail`
 
-        logging.info(".   * pos_order_detail")
+        logging.info("    * pos_order_detail")
 
         df = client.get_pos_orders(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
@@ -235,7 +245,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `pos_order`
 
-        logging.info(".   * pos_order")
+        logging.info("    * pos_order")
 
         df = df[0].drop("lines", axis=1)
         df = df.drop("partner_name", axis=1)
@@ -244,7 +254,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `purchase_detail`
 
-        logging.info(".   * purchase_order_detail")
+        logging.info("    * purchase_order_detail")
 
         df = client.get_purchase_orders(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
@@ -258,12 +268,14 @@ def main(start_date, end_date):
         dump_mysql(details, "purchase_order_detail")
 
         purchase_order = df[0]
+        # XXX temporary, done in odoo.py
+        purchase_order = purchase_order.rename(columns={"supplier_id": "partner_id"})
         dump_mysql(purchase_order, "purchase_order")
 
         # ---------------------------------------------------------------------
         # Table `account_invoice`
 
-        logging.info(".   * acount_invoice & account_invoice_line")
+        logging.info("    * account_invoice & account_invoice_line")
 
         invoices = client.get_account_invoices(
             month_date.strftime("%Y-%m-%d"),
@@ -277,7 +289,7 @@ def main(start_date, end_date):
         # ---------------------------------------------------------------------
         # Table `account_move_line`
 
-        logging.info(".   * account_move_line")
+        logging.info("    * account_move_line")
 
         account_move_line = client.get_account_move_lines(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
@@ -285,41 +297,56 @@ def main(start_date, end_date):
         dump_mysql(account_move_line, "account_move_line")
 
         # ---------------------------------------------------------------------
+        # Table `stock_move`
+
+        logging.info("    * stock_move")
+        stock_move = client.get_stock_moves(
+            month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+        )
+        # stock_move = stock_move.rename(columns={"picking_type_id", "stock_picking_type_id"})
+        dump_mysql(stock_move, "stock_move")
+
+        # ---------------------------------------------------------------------
         # Table `stock_move_line`
 
-        logging.info(".   * stock_move_line")
+        logging.info("    * stock_move_line")
         stock_move_line = client.get_stock_move_lines(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
+        # XXX temporary, done in odoo.py
+        stock_move_line = stock_move_line.rename(columns={"product_uom_id": "uom_id"})
         dump_mysql(stock_move_line, "stock_move_line")
 
         # ---------------------------------------------------------------------
         # Table `product_history`
 
-        logging.info(".   * product_history")
+        logging.info("    * product_history")
 
         result = client.get_product_history(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
+        # XXX temporary, done in odoo.py
+        result = result.rename(columns={"location_id": "stock_location_id"})
         dump_mysql(result, "product_history")
 
     add_constraints()
 
     # manual FK
     with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE product_rack ADD PRIMARY KEY (code)"))
-
-        conn.execute(
-            text(
-                "ALTER TABLE stock_move_line ADD CONSTRAINT fk_stock_move_line_location_dest_id FOREIGN KEY (dest_stock_location_id)  REFERENCES stock_location(id)"
-            )
+        execute_sql(
+            conn,
+            "ALTER TABLE stock_move_line ADD CONSTRAINT fk_stock_move_line_location_dest_id FOREIGN KEY (dest_stock_location_id)  REFERENCES stock_location(id)",
+        )
+        execute_sql(
+            conn,
+            "ALTER TABLE stock_move ADD CONSTRAINT fk_stock_move_location_dest_id FOREIGN KEY (dest_stock_location_id)  REFERENCES stock_location(id)",
         )
 
-        # conn.execute(
-        #     text(
-        #         "ALTER TABLE product ADD CONSTRAINT fk_product_rack FOREIGN KEY (rack_code)  REFERENCES rack(code)"
-        #     )
-        # )
+        execute_sql(conn, "ALTER TABLE product_rack ADD PRIMARY KEY (code)")
+        execute_sql(
+            conn,
+            "ALTER TABLE product ADD CONSTRAINT fk_product_rack FOREIGN KEY (product_rack_code) REFERENCES product_rack(code)",
+        )
 
         # conn.execute(
         #     text(

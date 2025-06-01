@@ -1,8 +1,8 @@
-import diskcache, logging, os, pandas as pd, pytz, sys, xmlrpc.client, yaml
+import diskcache, logging, os, pandas as pd, pytz, re, sys, xmlrpc.client, yaml
 
 from dotenv import load_dotenv
 from datetime import datetime
-from re import search
+from re import search, sub
 from otsokop.odoo_cache import odoo_cache
 
 banner = """
@@ -284,8 +284,6 @@ class Odoo:
                 purchase_order_lines = []
 
         orders = pd.DataFrame(data_orders)
-        orders = orders.rename(columns={"partner_id": "supplier_id"})
-
         orders = orders.drop("order_line", axis=1)
         orders["date_order"] = pd.to_datetime(orders["date_order"])
 
@@ -318,7 +316,23 @@ class Odoo:
         )
 
         for line in results:
+            line["deref"] = False
             self._remove_odoo_id(line, ["product_tmpl_id", "categ_id"])
+            if line["rack_location"]:
+                rack = line["rack_location"]
+                if (
+                    search("[bD][eé]ref", rack, flags=re.IGNORECASE)
+                    or rack == "Pas de rotation"
+                ):
+                    line["deref"] = True
+
+                rack = sub("[bD][eé]ref", "", rack, flags=re.IGNORECASE)
+                rack = sub("\s*-\s*", "", rack)
+                rack = sub("Pas de rotation", "", rack)
+                rack = rack.strip()
+                if rack == "":
+                    rack = None
+                line["rack_location"] = rack
 
         results = pd.DataFrame(results)
         self._set_zeros_to_none(
@@ -417,6 +431,47 @@ class Odoo:
         return result
 
     @odoo_cache()
+    def get_stock_moves(self, date_start, date_end):
+        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+
+        stock_moves = self.execute_kw(
+            "stock.move",
+            "search_read",
+            [
+                [
+                    ["date_expected", ">=", datetime_start],
+                    ["date_expected", "<=", datetime_end],
+                ],
+                [
+                    "date_expected",
+                    "location_id",
+                    "location_dest_id",
+                    "product_id",
+                    "product_qty",
+                    "price_unit",
+                    "picking_type_id",
+                ],
+            ],
+        )
+
+        for sm in stock_moves:
+            self._remove_odoo_id(
+                sm, ["product_id", "location_id", "picking_type_id", "location_dest_id"]
+            )
+        result = pd.DataFrame(stock_moves)
+        result["date_expected"] = pd.to_datetime(result["date_expected"])
+        self._set_zeros_to_none(result, ["picking_type_id"])
+        result = result.rename(
+            columns={
+                "location_id": "stock_location_id",
+                "location_dest_id": "dest_stock_location_id",
+                "picking_type_id": "stock_picking_type_id",
+            }
+        )
+
+        return result
+
+    @odoo_cache()
     def get_stock_move_lines(self, date_start, date_end):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
@@ -453,8 +508,11 @@ class Odoo:
             columns={
                 "location_id": "stock_location_id",
                 "location_dest_id": "dest_stock_location_id",
+                "move_id": "stock_move_location_id",
+                "product_uom_id": "uom_id",
             }
         )
+        self._set_zeros_to_none(result, ["stock_move_location_id"])
         result["date"] = pd.to_datetime(result["date"])
         return result
 
@@ -628,6 +686,32 @@ class Odoo:
         return result
 
     @odoo_cache(ttl=ONE_DAY)
+    def get_stock_picking_types(self):
+        result = self.execute_kw(
+            "stock.picking.type",
+            "search_read",
+            [
+                ["|", ["active", "=", True], ["active", "=", False]],
+                ["name", "code", "active"],
+            ],
+        )
+        result = pd.DataFrame(result)
+        return result
+
+    @odoo_cache(ttl=ONE_DAY)
+    def get_uoms(self):
+        result = self.execute_kw(
+            "uom.uom",
+            "search_read",
+            [
+                ["|", ["active", "=", True], ["active", "=", False]],
+                ["name", "measure_type", "rounding", "uom_type", "active"],
+            ],
+        )
+        result = pd.DataFrame(result)
+        return result
+
+    @odoo_cache(ttl=ONE_DAY)
     def get_accounts(self):
         result = self.execute_kw(
             "account.account",
@@ -701,7 +785,7 @@ class Odoo:
         result = pd.DataFrame(result)
         result["from_date"] = pd.to_datetime(result["from_date"])
         result["to_date"] = pd.to_datetime(result["to_date"])
-
+        result = result.rename(columns={"location_id": "stock_location_id"})
         return result
 
     @odoo_cache(ttl=ONE_DAY)
