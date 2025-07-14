@@ -8,7 +8,7 @@ from sqlalchemy import inspect, VARCHAR
 from sqlalchemy.sql import text
 
 start_date = "2021-01-01"
-end_date = "2025-05-31"
+end_date = "2025-06-30"
 
 INCLUDE_PRODUCT_TEMPLATE = True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
@@ -25,6 +25,9 @@ def iterate_months(start_date, end_date):
 
 
 def dump_mysql(df, table_name, dtype=None):
+    if df is None:
+        return
+
     df.to_sql(name=table_name, con=engine, if_exists="append", index=False, dtype=dtype)
 
 
@@ -214,19 +217,26 @@ def main(start_date, end_date):
     logging.info("Export `partner` table...")
     dump_mysql(client.get_partners(), "partner")
 
-    # -------------------------------------------------------------------------
-    # Table `product_loss`
-
-    logging.info("Export `product_loss` table...")
-    dump_mysql(client.get_product_losses(start_date, end_date), "product_loss")
-
     # loop for each month to avoid requesting huge amount of data in a single
     # call.
 
     for month_date in iterate_months(start_date, end_date):
-        logging.info(f"Fetching data for {month_date.strftime('%Y-%m-%d')}...")
-
         end = month_date + relativedelta(months=1, days=-1)
+
+        logging.info(
+            f"Fetching data from {month_date.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}..."
+        )
+
+        # -------------------------------------------------------------------------
+        # Table `product_loss`
+
+        logging.info("    * product_loss")
+        dump_mysql(
+            client.get_product_losses(
+                month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+            ),
+            "product_loss",
+        )
 
         # ---------------------------------------------------------------------
         # Table `pos_order_detail`
@@ -343,10 +353,10 @@ def main(start_date, end_date):
         )
 
         execute_sql(conn, "ALTER TABLE product_rack ADD PRIMARY KEY (code)")
-        execute_sql(
-            conn,
-            "ALTER TABLE product ADD CONSTRAINT fk_product_rack FOREIGN KEY (product_rack_code) REFERENCES product_rack(code)",
-        )
+        # execute_sql(
+        #     conn,
+        #     "ALTER TABLE product ADD CONSTRAINT fk_product_rack FOREIGN KEY (product_rack_code) REFERENCES product_rack(code)",
+        # )
 
         # conn.execute(
         #     text(

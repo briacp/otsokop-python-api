@@ -14,7 +14,8 @@ def main():
     # portal_users_stats()
     # product_labels()
     # product_list()
-    misc()
+    #misc()
+    drop_keys()
 
 
 def misc():
@@ -22,6 +23,22 @@ def misc():
     suppliers = client.get_suppliers()
     suppliers.to_excel("output/suppliers.xlsx", index=False)
     print("done")
+
+
+def drop_keys():
+    for k in (
+        "get_account_invoices:2025-05-01",
+        "get_account_move_lines:2025-05-01",
+        "get_pos_orders:2025-05-01",
+        "get_product_history:2025-05-01",
+        "get_product_losses:2021-01-01",
+        "get_product_losses:2025-05-01",
+        "get_purchase_orders:2025-05-01",
+        "get_stock_move_lines:2025-05-01",
+        "get_stock_moves:2025-05-01",
+    ):
+        c = client.delete_cache_by_prefix(k)
+        print(f"Deleted {c} keys named '{k}'")
 
 
 def product_list():

@@ -27,14 +27,14 @@ class Odoo:
         password=None,
         debug=None,
         timezone=None,
-        logging_level=logging.INFO,
+        logging_level=None,
     ):
         load_dotenv()
 
         self._cache = diskcache.Cache("cache")
         self._cache.expire()
         logging.basicConfig(
-            level=Odoo._set_log_level(os.getenv("LOGGING_LEVEL") or "INFO"),
+            level=Odoo._set_log_level(logging_level or os.getenv("LOGGING_LEVEL") or "INFO"),
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
@@ -387,7 +387,7 @@ class Odoo:
         results = pd.DataFrame(results)
         return results
 
-    @odoo_cache()
+    @odoo_cache(force_fetch=True)
     def get_product_losses(self, date_start, date_end):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
@@ -406,7 +406,7 @@ class Odoo:
                         5,
                     ],
                     ["date_expected", ">=", datetime_start],
-                    ["date_expected", "<", datetime_end],
+                    ["date_expected", "<=", datetime_end],
                 ],
                 [
                     "date_expected",
@@ -423,6 +423,9 @@ class Odoo:
 
         for sm in stock_moves:
             self._remove_odoo_id(sm, ["product_id", "location_id"])
+
+        if not stock_moves:
+            return None
 
         result = pd.DataFrame(stock_moves)
         result["date_expected"] = pd.to_datetime(result["date_expected"])
@@ -778,6 +781,9 @@ class Odoo:
                 ],
             ],
         )
+
+        if result is None:
+            return None
 
         for line in result:
             self._remove_odoo_id(line, ["product_id", "location_id"])
