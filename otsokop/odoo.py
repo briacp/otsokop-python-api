@@ -34,7 +34,9 @@ class Odoo:
         self._cache = diskcache.Cache("cache")
         self._cache.expire()
         logging.basicConfig(
-            level=Odoo._set_log_level(logging_level or os.getenv("LOGGING_LEVEL") or "INFO"),
+            level=Odoo._set_log_level(
+                logging_level or os.getenv("LOGGING_LEVEL") or "INFO"
+            ),
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
@@ -363,6 +365,7 @@ class Odoo:
                     "city",
                     "street",
                     "street2",
+                    "zip",
                     "gender",
                     "age",
                     "is_squadleader",
@@ -385,9 +388,25 @@ class Odoo:
             ],
         )
         results = pd.DataFrame(results)
+        self._set_zeros_to_none(
+            results,
+            [
+                "street",
+                "street2",
+                "city",
+                "zip",
+                "mobile",
+                "email",
+                "gender",
+                "age",
+                "function",
+                "purchase_target",
+                "default_supplierinfo_discount",
+            ],
+        )
         return results
 
-    @odoo_cache(force_fetch=True)
+    @odoo_cache(force_fetch=False)
     def get_product_losses(self, date_start, date_end):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
@@ -453,6 +472,7 @@ class Odoo:
                     "product_qty",
                     "price_unit",
                     "picking_type_id",
+                    "state",
                 ],
             ],
         )
@@ -474,7 +494,7 @@ class Odoo:
 
         return result
 
-    @odoo_cache()
+    @odoo_cache(force_fetch=False)
     def get_stock_move_lines(self, date_start, date_end):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
@@ -488,11 +508,11 @@ class Odoo:
                 ],
                 [
                     "date",
-                    "display_name",
                     "location_id",
                     "location_dest_id",
                     "move_id",
                     "product_qty",
+                    "product_id",
                     "product_uom_id",
                     "product_uom_qty",
                     "qty_done",
@@ -503,7 +523,14 @@ class Odoo:
 
         for row in result:
             self._remove_odoo_id(
-                row, ["move_id", "location_dest_id", "location_id", "product_uom_id"]
+                row,
+                [
+                    "move_id",
+                    "location_dest_id",
+                    "location_id",
+                    "product_uom_id",
+                    "product_id",
+                ],
             )
 
         result = pd.DataFrame(result)
@@ -511,11 +538,11 @@ class Odoo:
             columns={
                 "location_id": "stock_location_id",
                 "location_dest_id": "dest_stock_location_id",
-                "move_id": "stock_move_location_id",
+                "move_id": "stock_move_id",
                 "product_uom_id": "uom_id",
             }
         )
-        self._set_zeros_to_none(result, ["stock_move_location_id"])
+        self._set_zeros_to_none(result, ["stock_move_id"])
         result["date"] = pd.to_datetime(result["date"])
         return result
 

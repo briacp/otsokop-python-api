@@ -323,8 +323,6 @@ def main(start_date, end_date):
         stock_move_line = client.get_stock_move_lines(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
-        # XXX temporary, done in odoo.py
-        stock_move_line = stock_move_line.rename(columns={"product_uom_id": "uom_id"})
         dump_mysql(stock_move_line, "stock_move_line")
 
         # ---------------------------------------------------------------------
