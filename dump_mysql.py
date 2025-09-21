@@ -8,11 +8,12 @@ from sqlalchemy import inspect, VARCHAR
 from sqlalchemy.sql import text
 
 start_date = "2021-01-01"
-end_date = "2025-06-30"
+end_date = "2025-08-31"
 
 INCLUDE_PRODUCT_TEMPLATE = True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
 
+load_dotenv()
 client = Odoo()
 engine = sa.create_engine(os.getenv("MYSQL_ENGINE"))
 
@@ -105,6 +106,8 @@ def add_constraints():
                     logging.error(
                         f"Could not add foreign key `{fk_col}` to `{table_name}`: {e}"
                     )
+                    logging.error("This might be due to missing data in the foreign key column. You can check with the following SQL query:")
+                    logging.error(f"SELECT DISTINCT {table_name}.{fk_col} FROM {table_name} LEFT JOIN {ref_table} ON {table_name}.{fk_col} = {ref_table}.id WHERE {ref_table}.id IS NULL AND {table_name}.{fk_col} IS NOT NULL;")
 
 
 def execute_sql(conn, sql):
