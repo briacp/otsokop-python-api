@@ -293,7 +293,7 @@ class Odoo:
 
         return result
 
-    @odoo_cache(ttl=ONE_DAY)
+    @odoo_cache(ttl=ONE_DAY, force_fetch=False)
     def get_products(self):
         logging.debug("Getting the list of all products...")
 
@@ -313,13 +313,61 @@ class Odoo:
                     "categ_id",
                     "product_tmpl_id",
                     "barcode",
+                    "base_price",
+                    "taxes_id",
+                    "fiscal_classification_id",
+                    "coeff1_id",
+                    # "coeff1_inter",
+                    # "coeff1_inter_sp",
+                    "coeff2_id",
+                    # "coeff2_inter",
+                    # "coeff2_inter_sp",
+                    "coeff3_id",
+                    # "coeff3_inter",
+                    # "coeff3_inter_sp",
+                    "coeff4_id",
+                    # "coeff4_inter",
+                    # "coeff4_inter_sp",
+                    "coeff5_id",
+                    # "coeff5_inter",
+                    # "coeff5_inter_sp",
+                    # "coeff6_id",
+                    # "coeff6_inter",
+                    # "coeff6_inter_sp",
+                    # "coeff7_id",
+                    # "coeff7_inter",
+                    # "coeff7_inter_sp",
+                    # "coeff8_id",
+                    # "coeff8_inter",
+                    # "coeff8_inter_sp",
+                    # "coeff9_id",
+                    # "coeff9_inter",
+                    # "coeff9_inter_sp",
                 ],
             ],
         )
 
         for line in results:
             line["deref"] = False
-            self._remove_odoo_id(line, ["product_tmpl_id", "categ_id"])
+            line["tax_id"] = line["taxes_id"][0] if line["taxes_id"] else None
+            self._remove_odoo_id(
+                line,
+                [
+                    "product_tmpl_id",
+                    "categ_id",
+                    "coeff1_id",
+                    "coeff2_id",
+                    "coeff3_id",
+                    "coeff4_id",
+                    "coeff5_id",
+                    # "coeff6_id",
+                    # "coeff7_id",
+                    # "coeff8_id",
+                    # "coeff9_id",
+                    "taxes_id",
+                    "fiscal_classification_id",
+                ],
+            )
             if line["rack_location"]:
                 rack = line["rack_location"]
                 if (
@@ -338,7 +386,22 @@ class Odoo:
 
         results = pd.DataFrame(results)
         self._set_zeros_to_none(
-            results, ["barcode", "rack_location", "theoritical_price"]
+            results,
+            [
+                "barcode",
+                "rack_location",
+                "theoritical_price",
+                "base_price",
+                "coeff1_id",
+                "coeff2_id",
+                "coeff3_id",
+                "coeff4_id",
+                "coeff5_id",
+                # "coeff6_id",
+                # "coeff7_id",
+                # "coeff8_id",
+                # "coeff9_id",
+            ],
         )
 
         results = results.rename(
@@ -703,6 +766,20 @@ class Odoo:
         return results
 
     @odoo_cache(ttl=ONE_DAY)
+    def get_product_coefficients(self):
+        result = self.execute_kw(
+            "product.coefficient",
+            "search_read",
+            [
+                ["|", ["active", "=", True], ["active", "=", False]],
+                ["name", "active", "note", "operation_type", "value"],
+            ],
+        )
+        result = pd.DataFrame(result)
+        self._set_zeros_to_none(result, ["note"])
+        return result
+
+    @odoo_cache(ttl=ONE_DAY)
     def get_account_journals(self):
         result = self.execute_kw(
             "account.journal",
@@ -739,6 +816,48 @@ class Odoo:
             ],
         )
         result = pd.DataFrame(result)
+        return result
+
+    @odoo_cache(ttl=ONE_DAY)
+    def get_account_taxes(self):
+        result = self.execute_kw(
+            "account.tax",
+            "search_read",
+            [
+                [],
+                [
+                    "id",
+                    "account_id",
+                    "name",
+                    "active",
+                    "amount",
+                    "amount_type",
+                ],
+            ],
+        )
+        for r in result:
+            self._remove_odoo_id(r, ["account_id"])
+
+        result = pd.DataFrame(result)
+        return result
+
+    @odoo_cache(ttl=ONE_DAY)
+    def get_account_fiscal_classification(self):
+        result = self.execute_kw(
+            "account.product.fiscal.classification",
+            "search_read",
+            [
+                [],
+                [
+                    "id",
+                    "name",
+                    "active",
+                    "description",
+                ],
+            ],
+        )
+        result = pd.DataFrame(result)
+        self._set_zeros_to_none(result, ["description"])
         return result
 
     @odoo_cache(ttl=ONE_DAY)

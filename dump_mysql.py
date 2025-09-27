@@ -28,6 +28,8 @@ def dump_mysql(df, table_name, dtype=None):
     if df is None:
         return
 
+    logging.info(f"Export `{table_name}` table...")
+
     df.to_sql(name=table_name, con=engine, if_exists="append", index=False, dtype=dtype)
 
 
@@ -118,18 +120,8 @@ def main(start_date, end_date):
     logging.info("Dropping existing tables...")
     truncate_tables()
 
-    # -------------------------------------------------------------------------
-    # Table `product_rack`
-
-    logging.info("Export `product_rack` table...")
     df = pd.read_csv("resources/racks.tsv", sep="\t")
     dump_mysql(df, "product_rack", {"code": VARCHAR(25)})
-
-    # -------------------------------------------------------------------------
-    # Tables `product` & `product_label`
-
-    logging.info("Export `product` & `product_label` tables...")
-
     df = client.get_products()
 
     template_labels = pd.DataFrame(columns=["product_id", "product_label_id"])
@@ -149,25 +141,14 @@ def main(start_date, end_date):
 
     dump_mysql(df, "product", {"product_rack_code": VARCHAR(25)})
     dump_mysql(template_labels, "map_product_label_product")
-
-    # -------------------------------------------------------------------------
-    # Table `account_journal`
-
-    logging.info("Export `account_journal` table...")
     dump_mysql(client.get_account_journals(), "account_journal")
-
-    # -------------------------------------------------------------------------
-    # Table `account`
-
-    logging.info("Export `account` table...")
     dump_mysql(client.get_accounts(), "account")
+    dump_mysql(client.get_product_coefficients(), "product_coefficient")
+    dump_mysql(client.get_account_taxes(), "account_tax")
 
     # -------------------------------------------------------------------------
     # Table `product_template` & `product_template_label`
     if INCLUDE_PRODUCT_TEMPLATE:
-
-        logging.info("Export `product_template` & `product_template_label` tables...")
-
         templates = client.get_product_templates()
 
         template_labels = pd.DataFrame(
@@ -187,35 +168,14 @@ def main(start_date, end_date):
         templates = templates.drop("label_ids", axis=1)
         dump_mysql(templates, "product_template")
 
-    # -------------------------------------------------------------------------
-    # Table `product_label`
-
-    logging.info("Export `product_label` table...")
     dump_mysql(client.get_product_labels(), "product_label")
-
-    # -------------------------------------------------------------------------
-    # Table `stock_location`
-
-    logging.info("Export `stock_location` table...")
     dump_mysql(client.get_stock_locations(), "stock_location")
-
-    # -------------------------------------------------------------------------
-    # Table `product_category`
-
-    logging.info("Export `product_category` table...")
     dump_mysql(client.get_product_categories(), "product_category")
-
-    logging.info("Export `stock_picking_type` table...")
     dump_mysql(client.get_stock_picking_types(), "stock_picking_type")
-
-    logging.info("Export `uom` table...")
     dump_mysql(client.get_uoms(), "uom")
-
-    # -------------------------------------------------------------------------
-    # Table `partner`
-
-    logging.info("Export `partner` table...")
     dump_mysql(client.get_partners(), "partner")
+    dump_mysql(client.get_account_fiscal_classification(), "account_fiscal_classification")
+    
 
     # loop for each month to avoid requesting huge amount of data in a single
     # call.
@@ -227,21 +187,12 @@ def main(start_date, end_date):
             f"Fetching data from {month_date.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}..."
         )
 
-        # -------------------------------------------------------------------------
-        # Table `product_loss`
-
-        logging.info("    * product_loss")
         dump_mysql(
             client.get_product_losses(
                 month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
             ),
             "product_loss",
         )
-
-        # ---------------------------------------------------------------------
-        # Table `pos_order_detail`
-
-        logging.info("    * pos_order_detail")
 
         df = client.get_pos_orders(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
@@ -252,19 +203,9 @@ def main(start_date, end_date):
         details = details.rename(columns={"order_id": "pos_order_id"})
         dump_mysql(details, "pos_order_detail")
 
-        # ---------------------------------------------------------------------
-        # Table `pos_order`
-
-        logging.info("    * pos_order")
-
         df = df[0].drop("lines", axis=1)
         df = df.drop("partner_name", axis=1)
         dump_mysql(df, "pos_order")
-
-        # ---------------------------------------------------------------------
-        # Table `purchase_detail`
-
-        logging.info("    * purchase_order_detail")
 
         df = client.get_purchase_orders(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
@@ -282,11 +223,6 @@ def main(start_date, end_date):
         purchase_order = purchase_order.rename(columns={"supplier_id": "partner_id"})
         dump_mysql(purchase_order, "purchase_order")
 
-        # ---------------------------------------------------------------------
-        # Table `account_invoice`
-
-        logging.info("    * account_invoice & account_invoice_line")
-
         invoices = client.get_account_invoices(
             month_date.strftime("%Y-%m-%d"),
             end.strftime("%Y-%m-%d"),
@@ -296,39 +232,21 @@ def main(start_date, end_date):
         invoices[1] = invoices[1].rename(columns={"invoice_id": "account_invoice_id"})
         dump_mysql(invoices[1], "account_invoice_line")
 
-        # ---------------------------------------------------------------------
-        # Table `account_move_line`
-
-        logging.info("    * account_move_line")
-
         account_move_line = client.get_account_move_lines(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
         dump_mysql(account_move_line, "account_move_line")
 
-        # ---------------------------------------------------------------------
-        # Table `stock_move`
-
-        logging.info("    * stock_move")
         stock_move = client.get_stock_moves(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
         # stock_move = stock_move.rename(columns={"picking_type_id", "stock_picking_type_id"})
         dump_mysql(stock_move, "stock_move")
 
-        # ---------------------------------------------------------------------
-        # Table `stock_move_line`
-
-        logging.info("    * stock_move_line")
         stock_move_line = client.get_stock_move_lines(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
         dump_mysql(stock_move_line, "stock_move_line")
-
-        # ---------------------------------------------------------------------
-        # Table `product_history`
-
-        logging.info("    * product_history")
 
         result = client.get_product_history(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")

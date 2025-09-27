@@ -14,15 +14,54 @@ def main():
     # portal_users_stats()
     # product_labels()
     # product_list()
-    #misc()
-    drop_keys()
+    # update_fiscal_classification()
+    misc()
+    # drop_keys()
 
 
 def misc():
     # client.dump_model_yaml("output/odoo_model.yaml")
-    suppliers = client.get_suppliers()
-    suppliers.to_excel("output/suppliers.xlsx", index=False)
+    # user_data = client.execute_kw('res.users', 'search_read',         [
+    #         [],
+    #         [    'name', 'login', 'email'],
+    #     ],)
+    # print(user_data)
+    #     suppliers.to_excel("output/products_TX.xlsx", index=False)
+    #     print(suppliers)
     print("done")
+
+
+def update_fiscal_classification():
+    product_template_ids = []
+    # fetch all product.template IDs from notes mistakenly updating fiscal classification
+    mails = client.execute_kw(
+        "mail.message",
+        "search_read",
+        [
+            [
+                ["author_id", "=", 4627],
+                ["date", ">=", "2025-09-26 21:00:00"],
+                ["date", "<", "2025-09-27 09:00:00"],
+                ["model", "=", "product.template"],
+            ],
+            ["res_id", "model", "subject", "date", "body"],
+        ],
+    )
+    for r in mails:
+        product_template_ids.append(r["res_id"])
+
+    # Revert fiscal classification to the correct one
+    update = client.execute_kw(
+        "product.template",
+        "write",
+        [
+            # Product IDs
+            product_template_ids,
+            {"fiscal_classification_id": 10},  # New fiscal classification ID
+        ],
+    )
+
+    print(f"Updated fiscal classification for products: {update}")
 
 
 def drop_keys():
