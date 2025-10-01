@@ -25,6 +25,7 @@ RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 SEND_EMAIL = True
 
+
 def main():
     client = Odoo()
     stocks = client.execute_kw(
@@ -73,7 +74,8 @@ def main():
         <p>Bonjour,</p>
         <p>Voici en pièce-jointe la liste des produits dont le stock est négatif.</p>
     """
-        ])
+        ]
+    )
 
     content.extend(
         [
@@ -133,7 +135,11 @@ def send_email(body, attachments=None):
 
     msg.attach(MIMEText("\n".join(body), "html"))
 
-    msg.attach(MIMEApplication(open("stocks_negatifs.xlsx", "rb").read(), Name="stocks_negatifs.xlsx"))
+    msg.attach(
+        MIMEApplication(
+            open("stocks_negatifs.xlsx", "rb").read(), Name="stocks_negatifs.xlsx"
+        )
+    )
 
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:

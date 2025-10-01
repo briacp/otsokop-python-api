@@ -8,6 +8,7 @@ client = Odoo()
 
 def main():
     print("misc export...")
+    misc()
     # stock_picking()
     # stock_quant()
     # product_categories()
@@ -15,20 +16,50 @@ def main():
     # product_labels()
     # product_list()
     # update_fiscal_classification()
-    misc()
     # drop_keys()
+    # fix_etiquettes_FL()
 
 
 def misc():
+    print(">>> Otsokop Python API <<<")
     # client.dump_model_yaml("output/odoo_model.yaml")
-    # user_data = client.execute_kw('res.users', 'search_read',         [
-    #         [],
-    #         [    'name', 'login', 'email'],
-    #     ],)
-    # print(user_data)
-    #     suppliers.to_excel("output/products_TX.xlsx", index=False)
-    #     print(suppliers)
-    print("done")
+    # print("done")
+    client.clear_caches()
+    # yield
+
+
+def fix_etiquettes_FL():
+    produits_frais = client.execute_kw(
+        "product.template",
+        "search_read",
+        [
+            [
+                ["categ_id", "in", [14, 16]],
+            ],
+            ["name"],
+        ],
+    )
+
+    product_template_ids = []
+    for r in produits_frais:
+        product_template_ids.append(
+            r["id"][0] if isinstance(r["id"], list) else r["id"]
+        )
+
+    print(
+        f"Found {len(product_template_ids)} 'Produits frais' to update print category"
+    )
+
+    update = client.execute_kw(
+        "product.template",
+        "write",
+        [
+            product_template_ids,
+            {"print_category_id": 20},
+        ],
+    )
+
+    print(f"Updated print_categ_id: {update}")
 
 
 def update_fiscal_classification():

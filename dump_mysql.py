@@ -174,8 +174,9 @@ def main(start_date, end_date):
     dump_mysql(client.get_stock_picking_types(), "stock_picking_type")
     dump_mysql(client.get_uoms(), "uom")
     dump_mysql(client.get_partners(), "partner")
-    dump_mysql(client.get_account_fiscal_classification(), "account_fiscal_classification")
-    
+    dump_mysql(
+        client.get_account_fiscal_classification(), "account_fiscal_classification"
+    )
 
     # loop for each month to avoid requesting huge amount of data in a single
     # call.

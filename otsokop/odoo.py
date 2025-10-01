@@ -97,6 +97,19 @@ class Odoo:
             print("Fault string: %s" % err.faultString, file=sys.stderr)
             # raise Exception("Odoo XMLRPC Exception")
 
+    def clear_caches(self):
+        if not (self._uid):
+            self._connect()
+
+        # logging.debug(f"execute_kw {model} {method}")
+        try:
+            return self.odoo.execute_kw(
+                self.db, self._uid, self._password, "ir.qweb", "clear_caches", []
+            )
+        except xmlrpc.client.Fault as err:
+            print("Odoo error occured - code: %d" % err.faultCode, file=sys.stderr)
+            print("Fault string: %s" % err.faultString, file=sys.stderr)
+
     @odoo_cache()
     def get_pos_orders(
         self, date_start, date_end: str = None, include_order_lines=True
