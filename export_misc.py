@@ -8,7 +8,9 @@ client = Odoo()
 
 def main():
     print("misc export...")
-    misc()
+    #update_to_print("product.product")
+    #update_to_print("product.template")
+    #misc()
     # stock_picking()
     # stock_quant()
     # product_categories()
@@ -16,7 +18,8 @@ def main():
     # product_labels()
     # product_list()
     # update_fiscal_classification()
-    # drop_keys()
+    # drop_keys("2025-08")
+    # drop_keys("2025-09")
     # fix_etiquettes_FL()
 
 
@@ -24,9 +27,8 @@ def misc():
     print(">>> Otsokop Python API <<<")
     # client.dump_model_yaml("output/odoo_model.yaml")
     # print("done")
-    client.clear_caches()
-    # yield
-
+    result = client.get_partners()
+    result.to_excel("output/partners.xlsx", index=False)
 
 def fix_etiquettes_FL():
     produits_frais = client.execute_kw(
@@ -95,17 +97,47 @@ def update_fiscal_classification():
     print(f"Updated fiscal classification for products: {update}")
 
 
-def drop_keys():
+def update_to_print(model_name="product.product"):
+    print(f"Resetting to_print field in {model_name}...")
+    product_ids = []
+    # reset to_print field for all products and product variants
+    products = client.execute_kw(
+        model_name,
+        "search_read",
+        [
+            [
+                ["to_print", "=", True],
+            ],
+            [],
+        ],
+    )
+    for p in products:
+        product_ids.append(p["id"])
+
+    # Revert fiscal classification to the correct one
+    update = client.execute_kw(
+        model_name,
+        "write",
+        [
+            product_ids,
+            {"to_print": False},
+        ],
+    )
+
+    print(f"Updated {model_name} to_print: {update}")
+
+
+
+def drop_keys(month):
     for k in (
-        "get_account_invoices:2025-07-01",
-        "get_account_move_lines:2025-07-01",
-        "get_pos_orders:2025-07-01",
-        "get_product_history:2025-07-01",
-        "get_product_losses:2021-01-01",
-        "get_product_losses:2025-07-01",
-        "get_purchase_orders:2025-07-01",
-        "get_stock_move_lines:2025-07-01",
-        "get_stock_moves:2025-07-01",
+        f"get_account_invoices:{month}-01",
+        f"get_account_move_lines:{month}-01",
+        f"get_pos_orders:{month}-01",
+        f"get_product_history:{month}-01",
+        f"get_product_losses:{month}-01",
+        f"get_purchase_orders:{month}-01",
+        f"get_stock_move_lines:{month}-01",
+        f"get_stock_moves:{month}-01",
     ):
         c = client.delete_cache_by_prefix(k)
         print(f"Deleted {c} keys named '{k}'")
