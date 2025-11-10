@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from re import search, sub
 from otsokop.odoo_cache import odoo_cache
+from typing import Any, Optional, Union
 
 banner = """
  ____ _____ ____  ____  _  __ ____  ____ 
@@ -83,32 +84,21 @@ class Odoo:
             f"{self.url}/xmlrpc/2/object", verbose=self.debug
         )
 
-    def execute_kw(self, model, method, params, *mapping: None):
+    def execute_kw(self, model:str, method:str, params:list, kwargs: Optional[dict] = None) -> Any:
         if not (self._uid):
             self._connect()
 
         # logging.debug(f"execute_kw {model} {method}")
         try:
+            if kwargs is None:
+                kwargs = {}
             return self.odoo.execute_kw(
-                self.db, self._uid, self._password, model, method, params, mapping
+                self.db, self._uid, self._password, model, method, params, kwargs
             )
         except xmlrpc.client.Fault as err:
             print("Odoo error occured - code: %d" % err.faultCode, file=sys.stderr)
             print("Fault string: %s" % err.faultString, file=sys.stderr)
             # raise Exception("Odoo XMLRPC Exception")
-
-    def clear_caches(self):
-        if not (self._uid):
-            self._connect()
-
-        # logging.debug(f"execute_kw {model} {method}")
-        try:
-            return self.odoo.execute_kw(
-                self.db, self._uid, self._password, "ir.qweb", "clear_caches", []
-            )
-        except xmlrpc.client.Fault as err:
-            print("Odoo error occured - code: %d" % err.faultCode, file=sys.stderr)
-            print("Fault string: %s" % err.faultString, file=sys.stderr)
 
     @odoo_cache()
     def get_pos_orders(
@@ -217,10 +207,8 @@ class Odoo:
             if pos_order["partner_id"]:
                 pos_order["partner_id"] = pos_order["partner_id"][0]
             else:
-                pos_order["partner_id"] = 0
-            pos_order["order_id"] = pos_order["order_id"][0]
-            pos_order["product_categ_id"] = pos_order["product_categ_id"][0]
-            pos_order["product_id"] = pos_order["product_id"][0]
+                pos_order["partner_id"] = None
+            self._remove_odoo_id(pos_order, ["order_id", "product_categ_id", "product_id"])
 
         report_pos_orders = pd.DataFrame(report_pos_orders)
         report_pos_orders["date"] = pd.to_datetime(report_pos_orders["date"])
@@ -306,7 +294,7 @@ class Odoo:
 
         return result
 
-    @odoo_cache(ttl=ONE_DAY, force_fetch=False)
+    @odoo_cache(ttl=ONE_DAY, force_fetch=True)
     def get_products(self):
         logging.debug("Getting the list of all products...")
 
@@ -328,7 +316,13 @@ class Odoo:
                     "barcode",
                     "base_price",
                     "taxes_id",
+                    "uom_id",
                     "fiscal_classification_id",
+                    "cost_method",
+                    "standard_price",
+                    "code",
+                    "list_price",
+                    "list_price_tax",
                     "coeff1_id",
                     # "coeff1_inter",
                     # "coeff1_inter_sp",
@@ -358,26 +352,27 @@ class Odoo:
                     # "coeff9_inter_sp",
                 ],
             ],
+            {"context": {"lang": "fr_FR"}},
         )
 
         for line in results:
             line["deref"] = False
-            line["tax_id"] = line["taxes_id"][0] if line["taxes_id"] else None
             self._remove_odoo_id(
                 line,
                 [
                     "product_tmpl_id",
                     "categ_id",
+                    "uom_id",
                     "coeff1_id",
                     "coeff2_id",
                     "coeff3_id",
                     "coeff4_id",
                     "coeff5_id",
+                    "taxes_id",
                     # "coeff6_id",
                     # "coeff7_id",
                     # "coeff8_id",
                     # "coeff9_id",
-                    "taxes_id",
                     "fiscal_classification_id",
                 ],
             )
@@ -405,6 +400,7 @@ class Odoo:
                 "rack_location",
                 "theoritical_price",
                 "base_price",
+                "taxes_id",
                 "coeff1_id",
                 "coeff2_id",
                 "coeff3_id",
@@ -419,6 +415,7 @@ class Odoo:
 
         results = results.rename(
             columns={
+                "taxes_id": "account_tax_id",
                 "categ_id": "product_category_id",
                 "product_tmpl_id": "product_template_id",
                 "rack_location": "product_rack_code",
@@ -481,52 +478,39 @@ class Odoo:
             ],
         )
         return results
-
-    @odoo_cache(force_fetch=False)
-    def get_product_losses(self, date_start, date_end):
+    
+    @odoo_cache()
+    def get_product_price_history(self, date_start, date_end):
         (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
 
-        stock_moves = self.execute_kw(
-            "stock.move",
+        price_history = self.execute_kw(
+            "product.price.history",
             "search_read",
             [
                 [
-                    ["state", "=", "done"],
-                    # Otsolab: Pertes
-                    ["picking_type_id", "=", 14],
-                    # Emplacements Virtuels/Pertes d'inventaire
-                    [
-                        "location_dest_id",
-                        "=",
-                        5,
-                    ],
-                    ["date_expected", ">=", datetime_start],
-                    ["date_expected", "<=", datetime_end],
+                    ["datetime", ">=", datetime_start],
+                    ["datetime", "<=", datetime_end],
                 ],
                 [
-                    "date_expected",
-                    "location_id",
+                    "datetime",
                     "product_id",
-                    "product_qty",
-                    "price_unit",
+                    "cost",
                 ],
-                0,  # offset
-                0,  # limit
-                "product_id,id",
             ],
         )
 
-        for sm in stock_moves:
-            self._remove_odoo_id(sm, ["product_id", "location_id"])
 
-        if not stock_moves:
+        if not price_history:
             return None
 
-        result = pd.DataFrame(stock_moves)
-        result["date_expected"] = pd.to_datetime(result["date_expected"])
-        result = result.rename(columns={"location_id": "stock_location_id"})
+        for ph in price_history:
+            self._remove_odoo_id(ph, ["product_id"])
 
-        return result
+
+        price_history = pd.DataFrame(price_history)
+        price_history["datetime"] = pd.to_datetime(price_history["datetime"])
+
+        return price_history
 
     @odoo_cache()
     def get_stock_moves(self, date_start, date_end):
@@ -750,7 +734,7 @@ class Odoo:
 
         return result
 
-    @odoo_cache(ttl=ONE_DAY)
+    @odoo_cache(ttl=ONE_DAY, force_fetch=True)
     def get_product_templates(self):
         results = self.execute_kw(
             "product.template",
@@ -763,13 +747,21 @@ class Odoo:
                     "available_in_pos",
                     "storage",
                     "sale_ok",
+                    "origin_description",
+                    "country_id",
+                    "department_id",
                     "default_code",
                     "create_date",
                     "type",
                     "label_ids",
+                    "image"
                 ],
             ],
+            {"context": {"lang": "fr_FR"}},
         )
+        for r in results:
+            r["country"] = r["country_id"][1] if r["country_id"] else None
+            r["department"] = r["department_id"][1] if r["department_id"] else None
 
         results = pd.DataFrame(results)
         results["create_date"] = pd.to_datetime(results["create_date"])
@@ -831,7 +823,7 @@ class Odoo:
         result = pd.DataFrame(result)
         return result
 
-    @odoo_cache(ttl=ONE_DAY)
+    @odoo_cache(ttl=ONE_DAY, force_fetch=False)
     def get_account_taxes(self):
         result = self.execute_kw(
             "account.tax",
@@ -852,6 +844,7 @@ class Odoo:
             self._remove_odoo_id(r, ["account_id"])
 
         result = pd.DataFrame(result)
+        self._set_zeros_to_none(result, ["account_id"])
         return result
 
     @odoo_cache(ttl=ONE_DAY)
@@ -966,7 +959,7 @@ class Odoo:
         result = pd.DataFrame(result)
         return result
 
-    @odoo_cache(ttl=ONE_DAY)
+    @odoo_cache(ttl=ONE_DAY, force_fetch=False)
     def get_product_categories(self):
         results = self.execute_kw(
             "product.category",
@@ -977,13 +970,14 @@ class Odoo:
                     "id",
                     "display_name",
                     "parent_id",
+                    "property_stock_valuation_account_id"
                     # "product_count",
                 ],
             ],
         )
 
         for r in results:
-            r["parent_id"] = r["parent_id"][0] if r["parent_id"] else None
+            self._remove_odoo_id(r, ["parent_id", "property_stock_valuation_account_id"])
 
         results = pd.DataFrame(results)
         results = results.rename(columns={"display_name": "name"})

@@ -31,7 +31,8 @@ def process_name(name, category):
         return name
 
     # Trim whitespace, remove diacritics and convert to uppercase
-    processed_name = re.sub(r"\s+", " ", remove_diacritics(name.strip()).upper())
+    processed_name = re.sub(r"\s+", " ", remove_diacritics(name.strip()))
+    processed_name = processed_name.upper()
     processed_name = re.sub(r"(\d)\sG\b", "$1G", processed_name)
 
     # Add "V - " prefix for "Vrac" category if not already present
@@ -52,6 +53,7 @@ def process_odoo_model(model_name, dry_run=False):
             [],
             ["name"],
         ],
+        {"context": {"lang": "fr_FR"}},
     )
 
     print(f"Found {len(rows)} records in {model_name}")
@@ -70,14 +72,16 @@ def process_odoo_model(model_name, dry_run=False):
                         [row["id"]],
                         {"name": normalized_name},
                     ],
+                    {"context": {"lang": "fr_FR"}},
                 )
                 print(f"  -> {result}")
 
 
 def main():
+    #process_odoo_model("res.partner")
     process_odoo_model("product.product")
-    # process_odoo_model("product.template")
-    # process_odoo_model("product.category")
+    #process_odoo_model("product.template")
+    #process_odoo_model("product.category")
 
 
 if __name__ == "__main__":

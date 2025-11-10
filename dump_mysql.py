@@ -8,7 +8,7 @@ from sqlalchemy import inspect, VARCHAR
 from sqlalchemy.sql import text
 
 start_date = "2021-01-01"
-end_date = "2025-06-30"
+end_date = "2025-09-30"
 
 INCLUDE_PRODUCT_TEMPLATE = True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
@@ -188,13 +188,6 @@ def main(start_date, end_date):
             f"Fetching data from {month_date.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}..."
         )
 
-        dump_mysql(
-            client.get_product_losses(
-                month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
-            ),
-            "product_loss",
-        )
-
         df = client.get_pos_orders(
             month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
         )
@@ -256,10 +249,36 @@ def main(start_date, end_date):
         result = result.rename(columns={"location_id": "stock_location_id"})
         dump_mysql(result, "product_history")
 
+        product_price_history = client.get_product_price_history(
+            month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+        dump_mysql(product_price_history, "product_price_history")
+
     add_constraints()
 
     # manual FK
     with engine.begin() as conn:
+        execute_sql(
+            conn,
+            """
+            CREATE VIEW product_loss AS
+            SELECT
+                sm.date_expected,
+                sm.stock_location_id,
+                sm.product_id,
+                sm.product_qty,
+                sm.price_unit
+            FROM
+                stock_move sm
+            INNER JOIN stock_picking_type sp ON
+                sm.stock_picking_type_id = sp.id
+                AND sp.name = 'Pertes'
+            INNER JOIN stock_location sld ON
+                sm.dest_stock_location_id = sld.id
+            WHERE
+                state = 'done'
+                AND sld.name = 'Inventory loss'; 
+            """
+        )
         execute_sql(
             conn,
             "ALTER TABLE stock_move_line ADD CONSTRAINT fk_stock_move_line_location_dest_id FOREIGN KEY (dest_stock_location_id)  REFERENCES stock_location(id)",
@@ -270,6 +289,28 @@ def main(start_date, end_date):
         )
 
         execute_sql(conn, "ALTER TABLE product_rack ADD PRIMARY KEY (code)")
+        execute_sql(
+            conn,
+            "ALTER TABLE product ADD CONSTRAINT fk_product_coeff1 FOREIGN KEY (coeff1_id) REFERENCES product_coefficient(id)",
+        )
+        execute_sql(
+            conn,
+            "ALTER TABLE product ADD CONSTRAINT fk_product_coeff2 FOREIGN KEY (coeff2_id) REFERENCES product_coefficient(id)",
+        )
+        execute_sql(
+            conn,
+            "ALTER TABLE product ADD CONSTRAINT fk_product_coeff3 FOREIGN KEY (coeff3_id) REFERENCES product_coefficient(id)",
+        )
+        execute_sql(
+            conn,
+            "ALTER TABLE product ADD CONSTRAINT fk_product_coeff4 FOREIGN KEY (coeff4_id) REFERENCES product_coefficient(id)",
+        )
+        execute_sql(
+            conn,
+            "ALTER TABLE product ADD CONSTRAINT fk_product_coeff5 FOREIGN KEY (coeff5_id) REFERENCES product_coefficient(id)",
+        )
+        # execute_sql(conn, "ALTER TABLE product ADD CONSTRAINT fk_fiscal_classif FOREIGN KEY (fiscal_classification_id) REFERENCES account_fiscal_classification(id)")
+
         # execute_sql(
         #     conn,
         #     "ALTER TABLE product ADD CONSTRAINT fk_product_rack FOREIGN KEY (product_rack_code) REFERENCES product_rack(code)",
