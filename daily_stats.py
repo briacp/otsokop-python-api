@@ -13,6 +13,8 @@ import os
 import smtplib
 import sys
 
+# Daily Sales Stats
+
 FR_HOLIDAYS = holidays.FR()
 LOCALE = "fr_FR"
 DAY_FORMAT = "EEEE'<br/>'dd MMMM'<br/>'yyyy"
