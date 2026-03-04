@@ -8,9 +8,9 @@ from sqlalchemy import inspect, VARCHAR
 from sqlalchemy.sql import text
 
 start_date = "2021-01-01"
-end_date = "2025-09-30"
+end_date = "2026-02-28"
 
-INCLUDE_PRODUCT_TEMPLATE = True
+INCLUDE_PRODUCT_TEMPLATE = False # FIXME True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
 
 client = Odoo()
@@ -141,7 +141,7 @@ def main(start_date, end_date):
 
     dump_mysql(df, "product", {"product_rack_code": VARCHAR(25)})
     dump_mysql(template_labels, "map_product_label_product")
-    dump_mysql(client.get_account_journals(), "account_journal")
+    #FIXME dump_mysql(client.get_account_journals(), "account_journal")
     dump_mysql(client.get_accounts(), "account")
     dump_mysql(client.get_product_coefficients(), "product_coefficient")
     dump_mysql(client.get_account_taxes(), "account_tax")
@@ -257,6 +257,8 @@ def main(start_date, end_date):
 
     # manual FK
     with engine.begin() as conn:
+
+        execute_sql( conn, "DROP VIEW product_loss IF EXISTS")
         execute_sql(
             conn,
             """
@@ -276,7 +278,7 @@ def main(start_date, end_date):
                 sm.dest_stock_location_id = sld.id
             WHERE
                 state = 'done'
-                AND sld.name = 'Inventory loss'; 
+                AND sld.name = 'Inventory loss'
             """
         )
         execute_sql(
