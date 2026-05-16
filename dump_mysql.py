@@ -271,29 +271,28 @@ def main(start_date, end_date):
     # manual FK
     with engine.begin() as conn:
 
-        # execute_sql( conn, "DROP VIEW product_loss IF EXISTS")
-        # execute_sql(
-        #     conn,
-        #     """
-        #     CREATE VIEW product_loss AS
-        #     SELECT
-        #         sm.date_expected,
-        #         sm.stock_location_id,
-        #         sm.product_id,
-        #         sm.product_qty,
-        #         sm.price_unit
-        #     FROM
-        #         stock_move sm
-        #     INNER JOIN stock_picking_type sp ON
-        #         sm.stock_picking_type_id = sp.id
-        #         AND sp.name = 'Pertes'
-        #     INNER JOIN stock_location sld ON
-        #         sm.dest_stock_location_id = sld.id
-        #     WHERE
-        #         state = 'done'
-        #         AND sld.name = 'Inventory loss'
-        #     """
-        # )
+        execute_sql(
+            conn,
+            """
+            CREATE OR REPLACE VIEW product_loss AS
+            SELECT
+                sm.date_expected,
+                sm.stock_location_id,
+                sm.product_id,
+                sm.product_qty,
+                sm.price_unit
+            FROM
+                stock_move sm
+            INNER JOIN stock_picking_type sp ON
+                sm.stock_picking_type_id = sp.id
+                AND sp.name = 'Pertes'
+            INNER JOIN stock_location sld ON
+                sm.dest_stock_location_id = sld.id
+            WHERE
+                state = 'done'
+                AND sld.name = 'Inventory loss'
+            """,
+        )
         execute_sql(
             conn,
             "ALTER TABLE stock_move_line ADD CONSTRAINT fk_stock_move_line_location_dest_id FOREIGN KEY (dest_stock_location_id)  REFERENCES stock_location(id)",
