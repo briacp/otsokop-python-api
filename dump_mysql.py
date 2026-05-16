@@ -7,8 +7,6 @@ from otsokop.odoo import Odoo
 from sqlalchemy import inspect, VARCHAR, URL
 from sqlalchemy.sql import text
 
-DEFAULT_START_DATE = "2021-01-01"
-
 INCLUDE_PRODUCT_TEMPLATE = False  # FIXME True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
 
@@ -346,18 +344,21 @@ def main(start_date, end_date):
 if __name__ == "__main__":
     load_dotenv()
     today = datetime.today()
+    default_start_date = (today.replace(day=1) - relativedelta(months=1)).strftime("%Y-%m-%d")
     default_end_date = (today.replace(day=1) - relativedelta(days=1)).strftime(
         "%Y-%m-%d"
     )
 
     parser = argparse.ArgumentParser(description="Dump Odoo data to MySQL")
     parser.add_argument(
-        "--start-date", default=DEFAULT_START_DATE, help="Start date (YYYY-MM-DD)"
+        "--start-date",
+        default=default_start_date,
+        help=f"Start date (YYYY-MM-DD, default: first day of previous month {default_start_date})"
     )
     parser.add_argument(
         "--end-date",
         default=default_end_date,
-        help="End date (YYYY-MM-DD, default: last day of previous month)",
+        help=f"End date (YYYY-MM-DD, default: last day of previous month {default_end_date})",
     )
     args = parser.parse_args()
 
