@@ -78,10 +78,10 @@ def process_odoo_model(model_name, dry_run=False):
 
 
 def main():
-    #process_odoo_model("res.partner")
+    # process_odoo_model("res.partner")
     process_odoo_model("product.product")
-    #process_odoo_model("product.template")
-    #process_odoo_model("product.category")
+    # process_odoo_model("product.template")
+    # process_odoo_model("product.category")
 
 
 if __name__ == "__main__":

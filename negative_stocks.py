@@ -68,23 +68,14 @@ def main():
     )
 
     content = start_html()
-    content.extend(
-        [
-            """
+    content.extend(["""
         <p>Bonjour,</p>
         <p>Voici en pièce-jointe la liste des produits dont le stock est négatif.</p>
-    """
-        ]
-    )
+    """])
 
-    content.extend(
-        [
-            """
+    content.extend(["""
         <p>Bonne journée,</p>
-        """
-            "</body></html>"
-        ]
-    )
+        """ "</body></html>"])
 
     send_email(content)
 
@@ -93,8 +84,7 @@ def start_html():
     content = []
     content.append("<html><head>")
     content.append("<style>")
-    content.append(
-        """
+    content.append("""
     body { font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif; }
     h2 { color: #9c5c34; }
     table {  border-collapse: collapse; border: solid 1px #2b392b; }
@@ -114,8 +104,7 @@ def start_html():
     td.gap { width: 125px; }
     th.values { width: 150px; }
     td.current { font-weight: bold; }
-    """
-    )
+    """)
     content.append("</style>")
     content.append("</head><body>")
     return content

@@ -42,16 +42,12 @@ def main():
     date_start = datetime.strptime(date_start, "%Y-%m-%d")
 
     content = start_html()
-    content.extend(
-        [
-            """
+    content.extend(["""
         <p>Bonjour,</p>
         <p>
             Voici les derniers indicateurs de ventes à Otsokop :
         </p>
-    """
-        ]
-    )
+    """])
 
     daily_stats_content = daily_stats(date_start)
     if daily_stats_content is not None:
@@ -63,14 +59,9 @@ def main():
         monthly_stats_content = monthly_stats(last_month)
         content.extend(monthly_stats_content)
 
-    content.extend(
-        [
-            """
+    content.extend(["""
         <p>Bonne journée,</p>
-        """
-            "</body></html>"
-        ]
-    )
+        """ "</body></html>"])
 
     # Only send email if we have something to send...
     if (daily_stats_content is not None) or (monthly_stats_content is not None):
@@ -305,8 +296,7 @@ def start_html():
     content = []
     content.append("<html><head>")
     content.append("<style>")
-    content.append(
-        """
+    content.append("""
     body { font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif; }
     h2 { color: #9c5c34; }
     table {  border-collapse: collapse; border: solid 1px #2b392b; }
@@ -326,8 +316,7 @@ def start_html():
     td.gap { width: 125px; }
     th.values { width: 150px; }
     td.current { font-weight: bold; }
-    """
-    )
+    """)
     content.append("</style>")
     content.append("</head><body>")
     return content

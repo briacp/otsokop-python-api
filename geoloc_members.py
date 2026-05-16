@@ -6,7 +6,6 @@ from geopy import distance
 import time
 import simplekml as sk
 
-
 geolocator = BANFrance(user_agent="otsokop_geocode")
 print(otsokop_banner)
 client = Odoo()

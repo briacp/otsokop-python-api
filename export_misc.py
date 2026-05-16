@@ -8,9 +8,9 @@ client = Odoo()
 
 def main():
     print("misc export...")
-    #update_to_print("product.product")
-    #update_to_print("product.template")
-    #misc()
+    # update_to_print("product.product")
+    # update_to_print("product.template")
+    # misc()
     # stock_picking()
     # stock_quant()
     # product_categories()
@@ -29,6 +29,7 @@ def misc():
     # print("done")
     result = client.get_partners()
     result.to_excel("output/partners.xlsx", index=False)
+
 
 def fix_etiquettes_FL():
     produits_frais = client.execute_kw(
@@ -125,7 +126,6 @@ def update_to_print(model_name="product.product"):
     )
 
     print(f"Updated {model_name} to_print: {update}")
-
 
 
 def drop_keys(month):

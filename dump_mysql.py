@@ -1,20 +1,36 @@
-import logging, os, pandas as pd, sqlalchemy as sa, sys
+import argparse, logging, os, pandas as pd, sqlalchemy as sa, sys
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from otsokop.odoo import Odoo
-from sqlalchemy import inspect, VARCHAR
+from sqlalchemy import inspect, VARCHAR, URL
 from sqlalchemy.sql import text
 
-start_date = "2021-01-01"
-end_date = "2026-02-28"
+DEFAULT_START_DATE = "2021-01-01"
 
-INCLUDE_PRODUCT_TEMPLATE = False # FIXME True
+INCLUDE_PRODUCT_TEMPLATE = False  # FIXME True
 INCLUDE_PRODUCT_PRICE_HISTORY = False
 
 client = Odoo()
 engine = sa.create_engine(os.getenv("MYSQL_ENGINE"))
+
+
+def ensure_database_exists():
+    url = sa.engine.make_url(os.getenv("MYSQL_ENGINE"))
+    db_name = url.database
+    server_url = URL.create(
+        drivername=url.drivername,
+        username=url.username,
+        password=url.password,
+        host=url.host,
+        port=url.port,
+    )
+    tmp_engine = sa.create_engine(server_url)
+    with tmp_engine.connect() as conn:
+        conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}`"))
+    tmp_engine.dispose()
+    logging.info(f"Database `{db_name}` is ready.")
 
 
 def iterate_months(start_date, end_date):
@@ -90,16 +106,12 @@ def add_constraints():
             for fk_col, ref_table in info["potential_fks"]:
                 try:
                     constraint_name = f"fk_{table_name}_{ref_table}"
-                    conn.execute(
-                        text(
-                            f"""
+                    conn.execute(text(f"""
                         ALTER TABLE `{table_name}` 
                         ADD CONSTRAINT `{constraint_name}` 
                         FOREIGN KEY (`{fk_col}`) 
                         REFERENCES `{ref_table}`(`id`);
-                    """
-                        )
-                    )
+                    """))
                     logging.info(
                         f"Added FK `{fk_col}` to `{table_name}` referencing `{ref_table}`"
                     )
@@ -141,7 +153,7 @@ def main(start_date, end_date):
 
     dump_mysql(df, "product", {"product_rack_code": VARCHAR(25)})
     dump_mysql(template_labels, "map_product_label_product")
-    #FIXME dump_mysql(client.get_account_journals(), "account_journal")
+    # FIXME dump_mysql(client.get_account_journals(), "account_journal")
     dump_mysql(client.get_accounts(), "account")
     dump_mysql(client.get_product_coefficients(), "product_coefficient")
     dump_mysql(client.get_account_taxes(), "account_tax")
@@ -250,7 +262,8 @@ def main(start_date, end_date):
         dump_mysql(result, "product_history")
 
         product_price_history = client.get_product_price_history(
-            month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+            month_date.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+        )
         dump_mysql(product_price_history, "product_price_history")
 
     add_constraints()
@@ -325,13 +338,29 @@ def main(start_date, end_date):
         # )
 
     logging.info("Dump complete")
-    logging.info(
-        f"""Create a SQL dump with the following command:
+    logging.info(f"""Create a SQL dump with the following command:
     mysqldump --skip-lock-tables --routines --add-drop-table --disable-keys --extended-insert -u {os.getenv('MYSQL_USERNAME')}  -p{os.getenv('MYSQL_PASSWORD')} --host={os.getenv('MYSQL_HOST')} --port={os.getenv('MYSQL_PORT')} --protocol tcp {os.getenv('MYSQL_DATABASE')} | gzip -c > /tmp/{os.getenv('MYSQL_DATABASE')}.sql.gz
 
-    """
-    )
+    """)
 
 
 if __name__ == "__main__":
-    sys.exit(main(start_date, end_date))
+    load_dotenv()
+    today = datetime.today()
+    default_end_date = (today.replace(day=1) - relativedelta(days=1)).strftime(
+        "%Y-%m-%d"
+    )
+
+    parser = argparse.ArgumentParser(description="Dump Odoo data to MySQL")
+    parser.add_argument(
+        "--start-date", default=DEFAULT_START_DATE, help="Start date (YYYY-MM-DD)"
+    )
+    parser.add_argument(
+        "--end-date",
+        default=default_end_date,
+        help="End date (YYYY-MM-DD, default: last day of previous month)",
+    )
+    args = parser.parse_args()
+
+    ensure_database_exists()
+    sys.exit(main(args.start_date, args.end_date))
