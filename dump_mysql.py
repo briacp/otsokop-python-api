@@ -344,7 +344,9 @@ def main(start_date, end_date):
 if __name__ == "__main__":
     load_dotenv()
     today = datetime.today()
-    default_start_date = (today.replace(day=1) - relativedelta(months=1)).strftime("%Y-%m-%d")
+    default_start_date = (today.replace(day=1) - relativedelta(months=1)).strftime(
+        "%Y-%m-%d"
+    )
     default_end_date = (today.replace(day=1) - relativedelta(days=1)).strftime(
         "%Y-%m-%d"
     )
@@ -353,7 +355,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--start-date",
         default=default_start_date,
-        help=f"Start date (YYYY-MM-DD, default: first day of previous month {default_start_date})"
+        help=f"Start date (YYYY-MM-DD, default: first day of previous month {default_start_date})",
     )
     parser.add_argument(
         "--end-date",

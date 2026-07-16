@@ -84,7 +84,9 @@ class Odoo:
             f"{self.url}/xmlrpc/2/object", verbose=self.debug
         )
 
-    def execute_kw(self, model:str, method:str, params:list, kwargs: Optional[dict] = None) -> Any:
+    def execute_kw(
+        self, model: str, method: str, params: list, kwargs: Optional[dict] = None
+    ) -> Any:
         if not (self._uid):
             self._connect()
 
@@ -104,7 +106,7 @@ class Odoo:
     def get_pos_orders(
         self, date_start, date_end: str = None, include_order_lines=True
     ):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         data_orders = []
         data_order_lines = []
@@ -173,7 +175,7 @@ class Odoo:
 
     @odoo_cache()
     def get_report_pos_orders(self, date_start, date_end: str = None):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         logging.debug(f"get_report_pos_orders {datetime_start} - {datetime_end}")
 
@@ -208,7 +210,9 @@ class Odoo:
                 pos_order["partner_id"] = pos_order["partner_id"][0]
             else:
                 pos_order["partner_id"] = None
-            self._remove_odoo_id(pos_order, ["order_id", "product_categ_id", "product_id"])
+            self._remove_odoo_id(
+                pos_order, ["order_id", "product_categ_id", "product_id"]
+            )
 
         report_pos_orders = pd.DataFrame(report_pos_orders)
         report_pos_orders["date"] = pd.to_datetime(report_pos_orders["date"])
@@ -219,7 +223,7 @@ class Odoo:
     def get_purchase_orders(
         self, date_start, date_end: str = None, include_order_lines=True
     ):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         logging.debug(f"get_purchase_orders {datetime_start} - {datetime_end}")
 
@@ -478,10 +482,10 @@ class Odoo:
             ],
         )
         return results
-    
+
     @odoo_cache()
     def get_product_price_history(self, date_start, date_end):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         price_history = self.execute_kw(
             "product.price.history",
@@ -499,13 +503,11 @@ class Odoo:
             ],
         )
 
-
         if not price_history:
             return None
 
         for ph in price_history:
             self._remove_odoo_id(ph, ["product_id"])
-
 
         price_history = pd.DataFrame(price_history)
         price_history["datetime"] = pd.to_datetime(price_history["datetime"])
@@ -514,7 +516,7 @@ class Odoo:
 
     @odoo_cache()
     def get_stock_moves(self, date_start, date_end):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         stock_moves = self.execute_kw(
             "stock.move",
@@ -556,7 +558,7 @@ class Odoo:
 
     @odoo_cache(force_fetch=False)
     def get_stock_move_lines(self, date_start, date_end):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         result = self.execute_kw(
             "stock.move.line",
@@ -608,7 +610,7 @@ class Odoo:
 
     @odoo_cache()
     def get_account_invoices(self, date_start, date_end, include_invoice_lines=True):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         invoices = self.execute_kw(
             "account.invoice",
@@ -692,7 +694,7 @@ class Odoo:
 
     @odoo_cache()
     def get_account_move_lines(self, date_start, date_end):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         result = self.execute_kw(
             "account.move.line",
@@ -754,7 +756,7 @@ class Odoo:
                     "create_date",
                     "type",
                     "label_ids",
-                    "image"
+                    "image",
                 ],
             ],
             {"context": {"lang": "fr_FR"}},
@@ -906,7 +908,7 @@ class Odoo:
 
     @odoo_cache()
     def get_product_history(self, date_start, date_end):
-        (datetime_start, datetime_end) = self._interval_dates(date_start, date_end)
+        datetime_start, datetime_end = self._interval_dates(date_start, date_end)
 
         result = self.execute_kw(
             "product.history",
@@ -970,14 +972,16 @@ class Odoo:
                     "id",
                     "display_name",
                     "parent_id",
-                    "property_stock_valuation_account_id"
+                    "property_stock_valuation_account_id",
                     # "product_count",
                 ],
             ],
         )
 
         for r in results:
-            self._remove_odoo_id(r, ["parent_id", "property_stock_valuation_account_id"])
+            self._remove_odoo_id(
+                r, ["parent_id", "property_stock_valuation_account_id"]
+            )
 
         results = pd.DataFrame(results)
         results = results.rename(columns={"display_name": "name"})
