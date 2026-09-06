@@ -6,14 +6,6 @@ from re import search, sub
 from otsokop.odoo_cache import odoo_cache
 from typing import Any, Optional, Union
 
-banner = """
- ____ _____ ____  ____  _  __ ____  ____ 
-/  _ Y__ __Y ___\/  _ \/ |/ //  _ \/  __\\
-| / \| / \ |    \| / \||   / | / \||  \/|
-| \_/| | | \___ || \_/||   \ | \_/||  __/
-\____/ \_/ \____/\____/\_|\_\\\____/\_/   
-"""
-
 
 class Odoo:
     DISABLE_CACHE = False
@@ -389,7 +381,7 @@ class Odoo:
                     line["deref"] = True
 
                 rack = sub("[bD][eé]ref", "", rack, flags=re.IGNORECASE)
-                rack = sub("\s*-\s*", "", rack)
+                rack = sub("\\s*-\\s*", "", rack)
                 rack = sub("Pas de rotation", "", rack)
                 rack = rack.strip()
                 if rack == "":
@@ -767,8 +759,10 @@ class Odoo:
 
         results = pd.DataFrame(results)
         results["create_date"] = pd.to_datetime(results["create_date"])
-        results["storage"].replace(to_replace=0, value=pd.NA, inplace=True)
-        results["default_code"].replace(to_replace=0, value=pd.NA, inplace=True)
+        results["storage"] = results["storage"].replace(to_replace=0, value=pd.NA)
+        results["default_code"] = results["default_code"].replace(
+            to_replace=0, value=pd.NA
+        )
 
         return results
 
@@ -902,7 +896,7 @@ class Odoo:
                 ],
             )
         )
-        results["comment"].replace(to_replace=0, value=pd.NA, inplace=True)
+        results["comment"] = results["comment"].replace(to_replace=0, value=pd.NA)
 
         return results
 
@@ -1030,7 +1024,7 @@ class Odoo:
 
     def _set_zeros_to_none(self, df, oddo_fields):
         for odoo_field in oddo_fields:
-            df[odoo_field].replace(to_replace=0, value=pd.NA, inplace=True)
+            df[odoo_field] = df[odoo_field].replace(to_replace=0, value=pd.NA)
 
     def _check_cache(self, cache_key):
         if Odoo.DISABLE_CACHE:
