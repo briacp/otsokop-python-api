@@ -1,5 +1,4 @@
 from otsokop.odoo import Odoo
-from otsokop.odoo import banner as otsokop_banner
 import pandas as pd
 from geopy.geocoders import BANFrance
 from geopy import distance
@@ -7,7 +6,6 @@ import time
 import simplekml as sk
 
 geolocator = BANFrance(user_agent="otsokop_geocode")
-print(otsokop_banner)
 client = Odoo()
 
 FETCH_ODOO = False

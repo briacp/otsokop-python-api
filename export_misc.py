@@ -1,5 +1,4 @@
 from otsokop.odoo import Odoo
-from otsokop.odoo import banner as otsokop_banner
 import pandas as pd
 import sys
 
